@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto DCA Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    
+    <!-- Firebase v9 - More reliable -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+        import { getDatabase, ref, set, get, onValue } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js';
+        
+        window.firebaseModules = { initializeApp, getDatabase, ref, set, get, onValue };
+    </script>
+</head>
+<body class="bg-gradient-to-br from-gray-50 to-gray-100">
+    
+    <!-- Firebase Setup Modal -->
+    <div id="firebaseSetupModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl p-6 md:p-8 max-w-3xl w-full mx-4 max-h-screen overflow-y-auto">
+            <h2 class="text-2xl font-bold text-gray-900 mb-4">🔥 Firebase Setup</h2>
+            <p class="text-gray-600 mb-6">Eenmalige setup voor automatische synchronisatie tussen al je apparaten.</p>
+            
+            <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+                <h3 class="font-bold text-blue-900 mb-2">📋 Wat je nodig hebt:</h3>
+                <ol class="list-decimal list-inside space-y-2 text-sm text-blue-800">
+                    <li>Ga naar <a href="https://console.firebase.google.com" target="_blank" class="underline font-semibold">console.firebase.google.com</a></li>
+                    <li>Klik op "Create a project" (of "Project toevoegen")</li>
+                    <li>Geef het een naam (bijv. "crypto-dashboard")</li>
+                    <li>Google Analytics kan uit (niet nodig)</li>
+                    <li>Wacht tot project is aangemaakt</li>
+                    <li>Klik op "Web" (het </> icoontje)</li>
+                    <li>Geef je app een naam en klik "Register app"</li>
+                    <li>Kopieer de <strong>firebaseConfig</strong> die je ziet</li>
+                </ol>
+            </div>
+
+            <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-6">
+                <h3 class="font-bold text-yellow-900 mb-2">⚙️ Realtime Database activeren:</h3>
+                <ol class="list-decimal list-inside space-y-1 text-sm text-yellow-800">
+                    <li>Ga in Firebase naar "Build" → "Realtime Database"</li>
+                    <li>Klik "Create Database"</li>
+                    <li>Kies een locatie (bijv. europe-west1)</li>
+                    <li>Start in <strong>"test mode"</strong></li>
+                    <li>Klik "Enable"</li>
+                </ol>
+            </div>
+
+            <div class="space-y-3 mb-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">API Key:</label>
+                    <input type="text" id="fbApiKey" placeholder="AIza..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Auth Domain:</label>
+                    <input type="text" id="fbAuthDomain" placeholder="jouw-project.firebaseapp.com" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Database URL:</label>
+                    <input type="text" id="fbDatabaseURL" placeholder="https://jouw-project-default-rtdb.europe-west1.firebasedatabase.app" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Project ID:</label>
+                    <input type="text" id="fbProjectId" placeholder="jouw-project" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+
+            <div class="flex gap-3">
+                <button onclick="saveFirebaseConfig()" class="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                    💾 Opslaan en Verbinden
+                </button>
+                <button onclick="skipFirebaseSetup()" class="px-6 py-3 border border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition-colors">
+                    Later
+                </button>
+            </div>
+
+            <div class="mt-4 text-xs text-gray-500">
+                <p>💡 Tip: Deze gegevens worden lokaal opgeslagen. Op andere apparaten moet je ze opnieuw invoeren.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="min-h-screen p-4 md:p-8">
+        <div class="max-w-7xl mx-auto">
+            <!-- Header -->
+            <div class="mb-6 md:mb-8">
+                <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-2">Crypto DCA Dashboard</h1>
+                <p class="text-gray-600 text-sm md:text-base">Overzicht van je Bitcoin en XRP investeringen</p>
+                <div id="syncStatus" class="mt-2 text-sm flex items-center gap-3 flex-wrap">
+                    <span class="inline-flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-gray-400" id="statusDot"></span>
+                        <span class="text-gray-600" id="statusText">Laden...</span>
+                    </span>
+                    <button onclick="showFirebaseSetup()" class="text-blue-600 hover:underline text-xs">⚙️ Firebase Setup</button>
+                    <button onclick="exportData()" class="text-blue-600 hover:underline text-xs">📤 Exporteren</button>
+                    <button onclick="importData()" class="text-blue-600 hover:underline text-xs">📥 Importeren</button>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="mb-6 flex flex-wrap gap-2 md:gap-4 border-b border-gray-200">
+                <button id="dashboardTab" class="px-4 md:px-6 py-3 font-medium border-b-2 border-blue-600 text-blue-600 text-sm md:text-base">
+                    📊 Dashboard
+                </button>
+                <button id="inputTab" class="px-4 md:px-6 py-3 font-medium text-gray-600 hover:text-gray-900 text-sm md:text-base">
+                    ➕ Invoeren
+                </button>
+                <button onclick="exportToExcel()" class="md:ml-auto px-4 md:px-6 py-3 font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm md:text-base">
+                    📥 Excel
+                </button>
+            </div>
+
+            <!-- Dashboard Content -->
+            <div id="dashboardContent">
+                <!-- Stats Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 mb-6 md:mb-8">
+                    <div class="bg-white rounded-lg shadow-md p-4 md:p-6 border-l-4 border-blue-600">
+                        <p class="text-xs md:text-sm font-medium text-gray-600">Totale Inleg</p>
+                        <p class="text-xl md:text-2xl font-bold text-gray-900 mt-2" id="totaleInleg">€0.00</p>
+                        <p class="text-xs md:text-sm text-gray-500 mt-1">Cumulatief</p>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-md p-4 md:p-6 border-l-4 border-purple-600">
+                        <p class="text-xs md:text-sm font-medium text-gray-600">Huidige Waarde</p>
+                        <p class="text-xl md:text-2xl font-bold text-gray-900 mt-2" id="huidigeWaarde">€0.00</p>
+                        <p class="text-xs md:text-sm text-gray-500 mt-1">Portfolio waarde</p>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-md p-4 md:p-6 border-l-4" id="rendementCard">
+                        <p class="text-xs md:text-sm font-medium text-gray-600">Totaal Rendement</p>
+                        <p class="text-xl md:text-2xl font-bold text-gray-900 mt-2" id="rendementBedrag">€0.00</p>
+                        <p class="text-xs md:text-sm mt-1" id="rendementPercentage">0.0%</p>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-md p-4 md:p-6 border-l-4 border-orange-500">
+                        <p class="text-xs md:text-sm font-medium text-gray-600">Gem. Prijs BTC</p>
+                        <p class="text-xl md:text-2xl font-bold text-gray-900 mt-2" id="btcGemKoers">€0.00</p>
+                        <p class="text-xs md:text-sm text-gray-500 mt-1" id="btcHoeveelheid">0.000000 BTC</p>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-md p-4 md:p-6 border-l-4 border-gray-800">
+                        <p class="text-xs md:text-sm font-medium text-gray-600">Gem. Prijs XRP</p>
+                        <p class="text-xl md:text-2xl font-bold text-gray-900 mt-2" id="xrpGemKoers">€0.00</p>
+                        <p class="text-xs md:text-sm text-gray-500 mt-1" id="xrpHoeveelheid">0.00 XRP</p>
+                    </div>
+                </div>
+
+                <!-- Charts -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8">
+                    <div class="bg-white rounded-lg shadow-md p-4 md:p-6">
+                        <h3 class="text-base md:text-lg font-semibold text-gray-900 mb-4">Waarde Ontwikkeling BTC</h3>
+                        <canvas id="btcChart"></canvas>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-md p-4 md:p-6">
+                        <h3 class="text-base md:text-lg font-semibold text-gray-900 mb-4">Waarde Ontwikkeling XRP</h3>
+                        <canvas id="xrpChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-4 md:gap-6 mb-6 md:mb-8">
+                    <div class="bg-white rounded-lg shadow-md p-4 md:p-6">
+                        <h3 class="text-base md:text-lg font-semibold text-gray-900 mb-4">Rendement BTC & XRP</h3>
+                        <canvas id="rendementChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input Content -->
+            <div id="inputContent" class="hidden">
+                <!-- Current Prices -->
+                <div class="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6">
+                    <h2 class="text-xl md:text-2xl font-bold text-gray-900 mb-4">Huidige Koersen</h2>
+                    <p class="text-sm text-gray-600 mb-4">Dagelijkse snapshot van koersen</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Datum</label>
+                            <input type="date" id="snapshotDatum" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">BTC Koers (€)</label>
+                            <input type="number" step="0.01" placeholder="60576.69" id="huidigebtcKoers" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">XRP Koers (€)</label>
+                            <input type="number" step="0.01" placeholder="1.23" id="huidigexrpKoers" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        </div>
+                    </div>
+
+                    <button onclick="updateCurrentPrices()" class="w-full bg-green-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors">
+                        💰 Koersen Opslaan
+                    </button>
+                </div>
+
+                <!-- Input Form -->
+                <div class="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6">
+                    <h2 class="text-xl md:text-2xl font-bold text-gray-900 mb-4">Nieuwe Aankoop</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Datum</label>
+                            <input type="date" id="inputDatum" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Crypto</label>
+                            <select id="inputCrypto" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                <option value="BTC">Bitcoin (BTC)</option>
+                                <option value="XRP">Ripple (XRP)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Bedrag (€)</label>
+                            <input type="number" step="0.01" placeholder="15.00" id="inputBedrag" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Hoeveelheid</label>
+                            <input type="number" step="0.00000001" placeholder="0.00024" id="inputHoeveelheid" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        </div>
+                    </div>
+
+                    <div id="koersPreview" class="mb-4 p-4 bg-blue-50 rounded-lg hidden">
+                        <p class="text-sm text-gray-600">Berekende koers:</p>
+                        <p class="text-2xl font-bold text-blue-600" id="berekendKoers">€0.00</p>
+                        <p class="text-xs text-gray-500 mt-1" id="koersPer">per BTC</p>
+                    </div>
+
+                    <button onclick="addTransaction()" class="w-full bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                        ➕ Aankoop Toevoegen
+                    </button>
+                </div>
+
+                <!-- Transaction Lists -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                    <div class="bg-white rounded-lg shadow-md p-4 md:p-6">
+                        <h3 class="text-lg md:text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <div class="w-3 h-3 rounded-full bg-orange-500"></div>
+                            Bitcoin Aankopen
+                        </h3>
+                        <div id="btcList" class="space-y-2 max-h-96 overflow-y-auto"></div>
+                        <div class="mt-4 pt-4 border-t border-gray-200">
+                            <div class="flex justify-between text-sm">
+                                <span class="font-medium">Totaal:</span>
+                                <span class="font-bold" id="btcTotaalInleg">€0.00</span>
+                            </div>
+                            <div class="flex justify-between text-sm mt-1">
+                                <span class="font-medium">BTC:</span>
+                                <span class="font-bold" id="btcTotaalHoeveelheid">0.00000000</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow-md p-4 md:p-6">
+                        <h3 class="text-lg md:text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <div class="w-3 h-3 rounded-full bg-gray-800"></div>
+                            Ripple Aankopen
+                        </h3>
+                        <div id="xrpList" class="space-y-2 max-h-96 overflow-y-auto"></div>
+                        <div class="mt-4 pt-4 border-t border-gray-200">
+                            <div class="flex justify-between text-sm">
+                                <span class="font-medium">Totaal:</span>
+                                <span class="font-bold" id="xrpTotaalInleg">€0.00</span>
+                            </div>
+                            <div class="flex justify-between text-sm mt-1">
+                                <span class="font-medium">XRP:</span>
+                                <span class="font-bold" id="xrpTotaalHoeveelheid">0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Firebase configuration - PRE-CONFIGURED
+        let firebaseConfig = {
+            apiKey: "AIzaSyACziIk-vZiQsORvraWKpYi5mv5JMjdns0",
+            authDomain: "dca-en.firebaseapp.com",
+            databaseURL: "https://dca-en-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "dca-en"
+        };
+        
+        // Save to localStorage
+        localStorage.setItem('firebaseConfig', JSON.stringify(firebaseConfig));
+        
+        let database = null;
+        let firebaseInitialized = false;
+
+        // Data
+        let btcTransactions = [];
+        let xrpTransactions = [];
+        let currentBtcPrice = 60576.69;
+        let currentXrpPrice = 1.23;
+        let priceSnapshots = [];
+        let btcChart, xrpChart, rendementChart;
+
+        // Load Firebase config from localStorage
+        function loadFirebaseConfig() {
+            const stored = localStorage.getItem('firebaseConfig');
+            if (stored) {
+                try {
+                    firebaseConfig = JSON.parse(stored);
+                    initializeFirebase();
+                    return true;
+                } catch (e) {
+                    console.error('Error loading Firebase config:', e);
+                }
+            }
+            return false;
+        }
+
+        function showFirebaseSetup() {
+            document.getElementById('firebaseSetupModal').classList.remove('hidden');
+        }
+
+        function skipFirebaseSetup() {
+            document.getElementById('firebaseSetupModal').classList.add('hidden');
+            loadDefaultData();
+            updateDashboard();
+            updateTransactionLists();
+            updateStatus('Lokaal (geen sync)', 'yellow');
+        }
+
+        function saveFirebaseConfig() {
+            const config = {
+                apiKey: document.getElementById('fbApiKey').value.trim(),
+                authDomain: document.getElementById('fbAuthDomain').value.trim(),
+                databaseURL: document.getElementById('fbDatabaseURL').value.trim(),
+                projectId: document.getElementById('fbProjectId').value.trim()
+            };
+
+            if (!config.apiKey || !config.authDomain || !config.databaseURL || !config.projectId) {
+                alert('Vul alle velden in!');
+                return;
+            }
+
+            firebaseConfig = config;
+            localStorage.setItem('firebaseConfig', JSON.stringify(config));
+            document.getElementById('firebaseSetupModal').classList.add('hidden');
+            
+            initializeFirebase();
+        }
+
+        function initializeFirebase() {
+            if (firebaseInitialized || !firebaseConfig) return;
+            
+            // Wait for Firebase modules to load
+            if (!window.firebaseModules) {
+                setTimeout(initializeFirebase, 100);
+                return;
+            }
+            
+            try {
+                const { initializeApp, getDatabase, ref, set, get, onValue } = window.firebaseModules;
+                
+                const app = initializeApp(firebaseConfig);
+                database = getDatabase(app);
+                firebaseInitialized = true;
+                
+                // Store Firebase functions globally for use in other functions
+                window.dbRef = ref;
+                window.dbSet = set;
+                window.dbGet = get;
+                window.dbOnValue = onValue;
+                
+                updateStatus('Verbonden met Firebase', 'green');
+                
+                // Load data from Firebase
+                loadFromFirebase();
+                
+                // Listen for changes
+                setupFirebaseListeners();
+                
+            } catch (error) {
+                console.error('Firebase initialization error:', error);
+                updateStatus('Firebase fout - lokaal', 'red');
+                loadDefaultData();
+                updateDashboard();
+                updateTransactionLists();
+            }
+        }
+
+        function setupFirebaseListeners() {
+            const { ref, onValue } = window.firebaseModules;
+            
+            onValue(ref(database, 'btcTransactions'), (snapshot) => {
+                if (snapshot.exists()) {
+                    btcTransactions = snapshot.val() || [];
+                    updateDashboard();
+                    updateTransactionLists();
+                }
+            });
+            
+            onValue(ref(database, 'xrpTransactions'), (snapshot) => {
+                if (snapshot.exists()) {
+                    xrpTransactions = snapshot.val() || [];
+                    updateDashboard();
+                    updateTransactionLists();
+                }
+            });
+            
+            onValue(ref(database, 'priceSnapshots'), (snapshot) => {
+                if (snapshot.exists()) {
+                    priceSnapshots = snapshot.val() || [];
+                    updateDashboard();
+                }
+            });
+            
+            onValue(ref(database, 'currentPrices'), (snapshot) => {
+                if (snapshot.exists()) {
+                    const prices = snapshot.val();
+                    currentBtcPrice = prices.btc || currentBtcPrice;
+                    currentXrpPrice = prices.xrp || currentXrpPrice;
+                    updateDashboard();
+                }
+            });
+        }
+
+        function loadFromFirebase() {
+            if (!database || !window.dbGet || !window.dbRef) return;
+            
+            const { ref, get } = window.firebaseModules;
+            
+            Promise.all([
+                get(ref(database, 'btcTransactions')),
+                get(ref(database, 'xrpTransactions')),
+                get(ref(database, 'priceSnapshots')),
+                get(ref(database, 'currentPrices'))
+            ]).then(([btcSnap, xrpSnap, snapSnap, pricesSnap]) => {
+                let hasFirebaseData = false;
+                
+                if (btcSnap.exists() && btcSnap.val().length > 0) {
+                    btcTransactions = btcSnap.val();
+                    hasFirebaseData = true;
+                }
+                if (xrpSnap.exists() && xrpSnap.val().length > 0) {
+                    xrpTransactions = xrpSnap.val();
+                    hasFirebaseData = true;
+                }
+                if (snapSnap.exists()) {
+                    priceSnapshots = snapSnap.val() || [];
+                }
+                if (pricesSnap.exists()) {
+                    const prices = pricesSnap.val();
+                    currentBtcPrice = prices.btc || currentBtcPrice;
+                    currentXrpPrice = prices.xrp || currentXrpPrice;
+                }
+                
+                // If no data in Firebase, upload default data
+                if (!hasFirebaseData) {
+                    saveToFirebase();
+                }
+                
+                updateDashboard();
+                updateTransactionLists();
+            }).catch(error => {
+                console.error('Error loading from Firebase:', error);
+                updateDashboard();
+                updateTransactionLists();
+            });
+        }
+
+        function saveToFirebase() {
+            if (!database || !window.dbSet || !window.dbRef) {
+                // Fallback to localStorage
+                const data = {
+                    btcTransactions,
+                    xrpTransactions,
+                    currentBtcPrice,
+                    currentXrpPrice,
+                    priceSnapshots
+                };
+                localStorage.setItem('cryptoData', JSON.stringify(data));
+                return;
+            }
+            
+            const { ref, set } = window.firebaseModules;
+            
+            set(ref(database, 'btcTransactions'), btcTransactions);
+            set(ref(database, 'xrpTransactions'), xrpTransactions);
+            set(ref(database, 'priceSnapshots'), priceSnapshots);
+            set(ref(database, 'currentPrices'), {
+                btc: currentBtcPrice,
+                xrp: currentXrpPrice
+            });
+        }
+
+        function updateStatus(text, color) {
+            const dot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            
+            statusText.textContent = text;
+            
+            dot.className = 'w-2 h-2 rounded-full';
+            if (color === 'green') {
+                dot.classList.add('bg-green-500');
+            } else if (color === 'yellow') {
+                dot.classList.add('bg-yellow-500');
+            } else if (color === 'red') {
+                dot.classList.add('bg-red-500');
+            } else {
+                dot.classList.add('bg-gray-400');
+            }
+        }
+
+        function loadDefaultData() {
+            btcTransactions = [
+                { datum: '2026-01-23', bedrag: 15, hoeveelheid: 15 / 77708.13, koers: 77708.13 },
+                { datum: '2026-01-24', bedrag: 15, hoeveelheid: 15 / 77081.19, koers: 77081.19 },
+                { datum: '2026-01-25', bedrag: 15, hoeveelheid: 15 / 76421.44, koers: 76421.44 },
+                { datum: '2026-01-26', bedrag: 15, hoeveelheid: 15 / 75316.33, koers: 75316.33 },
+                { datum: '2026-01-27', bedrag: 30, hoeveelheid: 30 / 75882.13, koers: 75882.13 },
+                { datum: '2026-01-28', bedrag: 30, hoeveelheid: 30 / 75765.23, koers: 75765.23 },
+                { datum: '2026-01-29', bedrag: 30, hoeveelheid: 30 / 74970.01, koers: 74970.01 },
+                { datum: '2026-01-30', bedrag: 30, hoeveelheid: 30 / 70581.59, koers: 70581.59 },
+                { datum: '2026-01-31', bedrag: 30, hoeveelheid: 30 / 71833.92, koers: 71833.92 },
+                { datum: '2026-02-01', bedrag: 30, hoeveelheid: 30 / 67558.44, koers: 67558.44 },
+                { datum: '2026-02-02', bedrag: 30, hoeveelheid: 30 / 65934.07, koers: 65934.07 },
+                { datum: '2026-02-03', bedrag: 30, hoeveelheid: 30 / 67931.71, koers: 67931.71 },
+                { datum: '2026-02-04', bedrag: 30, hoeveelheid: 30 / 65835.67, koers: 65835.67 },
+                { datum: '2026-02-05', bedrag: 15, hoeveelheid: 15 / 61082.38, koers: 61082.38 },
+                { datum: '2026-02-06', bedrag: 15, hoeveelheid: 15 / 55870.08, koers: 55870.08 },
+                { datum: '2026-02-07', bedrag: 15, hoeveelheid: 15 / 58676.26, koers: 58676.26 },
+                { datum: '2026-02-08', bedrag: 15, hoeveelheid: 15 / 60211.95, koers: 60211.95 },
+                { datum: '2026-02-09', bedrag: 15, hoeveelheid: 15 / 60576.69, koers: 60576.69 }
+            ];
+
+            xrpTransactions = [
+                { datum: '2026-02-05', bedrag: 15, hoeveelheid: 15 / 1.24, koers: 1.24 },
+                { datum: '2026-02-06', bedrag: 15, hoeveelheid: 15 / 1.12, koers: 1.12 },
+                { datum: '2026-02-07', bedrag: 15, hoeveelheid: 15 / 1.22, koers: 1.22 },
+                { datum: '2026-02-08', bedrag: 15, hoeveelheid: 15 / 1.23, koers: 1.23 },
+                { datum: '2026-02-09', bedrag: 15, hoeveelheid: 15 / 1.23, koers: 1.23 }
+            ];
+        }
+
+        // Export/Import functions
+        function exportData() {
+            const data = {
+                btcTransactions,
+                xrpTransactions,
+                currentBtcPrice,
+                currentXrpPrice,
+                priceSnapshots,
+                exportedAt: new Date().toISOString()
+            };
+            
+            const dataStr = JSON.stringify(data, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `crypto-dca-backup-${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function importData() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const data = JSON.parse(event.target.result);
+                        btcTransactions = data.btcTransactions || [];
+                        xrpTransactions = data.xrpTransactions || [];
+                        currentBtcPrice = data.currentBtcPrice || 60576.69;
+                        currentXrpPrice = data.currentXrpPrice || 1.23;
+                        priceSnapshots = data.priceSnapshots || [];
+                        
+                        saveToFirebase();
+                        updateDashboard();
+                        updateTransactionLists();
+                        alert('Data succesvol geïmporteerd!');
+                    } catch (error) {
+                        alert('Fout bij importeren van data.');
+                        console.error(error);
+                    }
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        }
+
+        // Transaction functions
+        function updateCurrentPrices() {
+            const btcPrice = parseFloat(document.getElementById('huidigebtcKoers').value);
+            const xrpPrice = parseFloat(document.getElementById('huidigexrpKoers').value);
+            const datum = document.getElementById('snapshotDatum').value;
+
+            if (!datum) {
+                alert('Vul eerst een datum in!');
+                return;
+            }
+
+            if ((!btcPrice || btcPrice <= 0) && (!xrpPrice || xrpPrice <= 0)) {
+                alert('Vul minimaal één geldige koers in!');
+                return;
+            }
+
+            if (btcPrice && btcPrice > 0) currentBtcPrice = btcPrice;
+            if (xrpPrice && xrpPrice > 0) currentXrpPrice = xrpPrice;
+
+            const existingIndex = priceSnapshots.findIndex(s => s.datum === datum);
+            
+            if (existingIndex >= 0) {
+                if (btcPrice && btcPrice > 0) priceSnapshots[existingIndex].btcKoers = btcPrice;
+                if (xrpPrice && xrpPrice > 0) priceSnapshots[existingIndex].xrpKoers = xrpPrice;
+            } else {
+                priceSnapshots.push({
+                    datum: datum,
+                    btcKoers: btcPrice && btcPrice > 0 ? btcPrice : currentBtcPrice,
+                    xrpKoers: xrpPrice && xrpPrice > 0 ? xrpPrice : currentXrpPrice
+                });
+                priceSnapshots.sort((a, b) => new Date(a.datum) - new Date(b.datum));
+            }
+
+            document.getElementById('huidigebtcKoers').value = '';
+            document.getElementById('huidigexrpKoers').value = '';
+            document.getElementById('snapshotDatum').value = new Date().toISOString().split('T')[0];
+            
+            saveToFirebase();
+            alert('Koersen opgeslagen!');
+            document.getElementById('dashboardTab').click();
+        }
+
+        function addTransaction() {
+            const datum = document.getElementById('inputDatum').value;
+            const crypto = document.getElementById('inputCrypto').value;
+            const bedrag = parseFloat(document.getElementById('inputBedrag').value);
+            const hoeveelheid = parseFloat(document.getElementById('inputHoeveelheid').value);
+
+            if (!datum || !bedrag || !hoeveelheid || bedrag <= 0 || hoeveelheid <= 0) {
+                alert('Vul alle velden correct in!');
+                return;
+            }
+
+            const koers = bedrag / hoeveelheid;
+            const transaction = { datum, bedrag, hoeveelheid, koers };
+
+            if (crypto === 'BTC') {
+                btcTransactions.push(transaction);
+                btcTransactions.sort((a, b) => new Date(a.datum) - new Date(b.datum));
+            } else {
+                xrpTransactions.push(transaction);
+                xrpTransactions.sort((a, b) => new Date(a.datum) - new Date(b.datum));
+            }
+
+            document.getElementById('inputBedrag').value = '';
+            document.getElementById('inputHoeveelheid').value = '';
+            document.getElementById('koersPreview').classList.add('hidden');
+
+            saveToFirebase();
+            updateTransactionLists();
+            alert('Aankoop toegevoegd!');
+        }
+
+        function deleteTransaction(index, crypto) {
+            if (confirm('Weet je zeker dat je deze aankoop wilt verwijderen?')) {
+                if (crypto === 'BTC') {
+                    btcTransactions.splice(index, 1);
+                } else {
+                    xrpTransactions.splice(index, 1);
+                }
+                saveToFirebase();
+                updateTransactionLists();
+            }
+        }
+
+        // Tab switching
+        document.getElementById('dashboardTab').addEventListener('click', function() {
+            document.getElementById('dashboardContent').classList.remove('hidden');
+            document.getElementById('inputContent').classList.add('hidden');
+            this.classList.add('border-b-2', 'border-blue-600', 'text-blue-600');
+            this.classList.remove('text-gray-600');
+            document.getElementById('inputTab').classList.remove('border-b-2', 'border-blue-600', 'text-blue-600');
+            document.getElementById('inputTab').classList.add('text-gray-600');
+            updateDashboard();
+        });
+
+        document.getElementById('inputTab').addEventListener('click', function() {
+            document.getElementById('inputContent').classList.remove('hidden');
+            document.getElementById('dashboardContent').classList.add('hidden');
+            this.classList.add('border-b-2', 'border-blue-600', 'text-blue-600');
+            this.classList.remove('text-gray-600');
+            document.getElementById('dashboardTab').classList.remove('border-b-2', 'border-blue-600', 'text-blue-600');
+            document.getElementById('dashboardTab').classList.add('text-gray-600');
+            updateTransactionLists();
+        });
+
+        // Input handlers
+        document.getElementById('inputBedrag').addEventListener('input', updateKoersPreview);
+        document.getElementById('inputHoeveelheid').addEventListener('input', updateKoersPreview);
+        document.getElementById('inputCrypto').addEventListener('change', updateKoersPreview);
+
+        function updateKoersPreview() {
+            const bedrag = parseFloat(document.getElementById('inputBedrag').value);
+            const hoeveelheid = parseFloat(document.getElementById('inputHoeveelheid').value);
+            const crypto = document.getElementById('inputCrypto').value;
+
+            if (bedrag && hoeveelheid && bedrag > 0 && hoeveelheid > 0) {
+                const koers = bedrag / hoeveelheid;
+                document.getElementById('koersPreview').classList.remove('hidden');
+                document.getElementById('berekendKoers').textContent = '€' + koers.toFixed(2);
+                document.getElementById('koersPer').textContent = 'per ' + crypto;
+            } else {
+                document.getElementById('koersPreview').classList.add('hidden');
+            }
+        }
+
+        function updateTransactionLists() {
+            const btcList = document.getElementById('btcList');
+            btcList.innerHTML = '';
+            let btcTotaalBedrag = 0;
+            let btcTotaalCrypto = 0;
+
+            btcTransactions.forEach((t, i) => {
+                btcTotaalBedrag += t.bedrag;
+                btcTotaalCrypto += t.hoeveelheid;
+                
+                const item = document.createElement('div');
+                item.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100';
+                item.innerHTML = `
+                    <div class="flex-1">
+                        <p class="font-medium text-gray-900 text-sm">${new Date(t.datum).toLocaleDateString('nl-NL')}</p>
+                        <p class="text-xs text-gray-600">€${t.bedrag.toFixed(2)} • ${t.hoeveelheid.toFixed(8)} BTC</p>
+                        <p class="text-xs text-gray-500">€${t.koers.toFixed(2)}</p>
+                    </div>
+                    <button onclick="deleteTransaction(${i}, 'BTC')" class="text-red-500 hover:text-red-700 p-2">
+                        🗑️
+                    </button>
+                `;
+                btcList.appendChild(item);
+            });
+
+            document.getElementById('btcTotaalInleg').textContent = '€' + btcTotaalBedrag.toFixed(2);
+            document.getElementById('btcTotaalHoeveelheid').textContent = btcTotaalCrypto.toFixed(8);
+
+            const xrpList = document.getElementById('xrpList');
+            xrpList.innerHTML = '';
+            let xrpTotaalBedrag = 0;
+            let xrpTotaalCrypto = 0;
+
+            xrpTransactions.forEach((t, i) => {
+                xrpTotaalBedrag += t.bedrag;
+                xrpTotaalCrypto += t.hoeveelheid;
+                
+                const item = document.createElement('div');
+                item.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100';
+                item.innerHTML = `
+                    <div class="flex-1">
+                        <p class="font-medium text-gray-900 text-sm">${new Date(t.datum).toLocaleDateString('nl-NL')}</p>
+                        <p class="text-xs text-gray-600">€${t.bedrag.toFixed(2)} • ${t.hoeveelheid.toFixed(2)} XRP</p>
+                        <p class="text-xs text-gray-500">€${t.koers.toFixed(2)}</p>
+                    </div>
+                    <button onclick="deleteTransaction(${i}, 'XRP')" class="text-red-500 hover:text-red-700 p-2">
+                        🗑️
+                    </button>
+                `;
+                xrpList.appendChild(item);
+            });
+
+            document.getElementById('xrpTotaalInleg').textContent = '€' + xrpTotaalBedrag.toFixed(2);
+            document.getElementById('xrpTotaalHoeveelheid').textContent = xrpTotaalCrypto.toFixed(2);
+        }
+
+        function calculateData(transactions, currentPrice, crypto) {
+            let cumulatief = 0;
+            let cumulatiefHoeveelheid = 0;
+            
+            return transactions.map((t, index) => {
+                cumulatief += t.bedrag;
+                cumulatiefHoeveelheid += t.hoeveelheid;
+                
+                const snapshot = priceSnapshots.find(s => s.datum === t.datum);
+                let priceToUse;
+                
+                if (snapshot) {
+                    priceToUse = crypto === 'BTC' ? snapshot.btcKoers : snapshot.xrpKoers;
+                } else if (index === transactions.length - 1) {
+                    priceToUse = currentPrice;
+                } else {
+                    priceToUse = t.koers;
+                }
+                
+                const waarde = cumulatiefHoeveelheid * priceToUse;
+                const rendement = ((waarde / cumulatief) - 1) * 100;
+                
+                return {
+                    datum: new Date(t.datum).toLocaleDateString('nl-NL', { day: '2-digit', month: 'short' }),
+                    cumulatief: cumulatief,
+                    waarde: waarde,
+                    rendement: rendement,
+                    amount: cumulatiefHoeveelheid
+                };
+            });
+        }
+
+        function updateDashboard() {
+            if (btcTransactions.length === 0 || xrpTransactions.length === 0) return;
+
+            const btcData = calculateData(btcTransactions, currentBtcPrice, 'BTC');
+            const xrpData = calculateData(xrpTransactions, currentXrpPrice, 'XRP');
+
+            const btcLast = btcData[btcData.length - 1];
+            const xrpLast = xrpData[xrpData.length - 1];
+
+            const totaalInleg = btcLast.cumulatief + xrpLast.cumulatief;
+            const totaalWaarde = btcLast.waarde + xrpLast.waarde;
+            const totaalRendement = ((totaalWaarde / totaalInleg) - 1) * 100;
+
+            const btcGemKoers = btcLast.cumulatief / btcLast.amount;
+            const xrpGemKoers = xrpLast.cumulatief / xrpLast.amount;
+
+            document.getElementById('totaleInleg').textContent = '€' + totaalInleg.toFixed(2);
+            document.getElementById('huidigeWaarde').textContent = '€' + totaalWaarde.toFixed(2);
+            document.getElementById('rendementBedrag').textContent = '€' + Math.abs(totaalWaarde - totaalInleg).toFixed(2);
+            document.getElementById('rendementPercentage').textContent = totaalRendement.toFixed(1) + '%';
+            document.getElementById('rendementPercentage').className = totaalRendement >= 0 ? 'text-xs md:text-sm mt-1 text-green-600 font-semibold' : 'text-xs md:text-sm mt-1 text-red-600 font-semibold';
+            document.getElementById('rendementCard').style.borderLeftColor = totaalRendement >= 0 ? '#10b981' : '#ef4444';
+            
+            document.getElementById('btcGemKoers').textContent = '€' + btcGemKoers.toFixed(2);
+            document.getElementById('btcHoeveelheid').textContent = btcLast.amount.toFixed(6) + ' BTC';
+            
+            document.getElementById('xrpGemKoers').textContent = '€' + xrpGemKoers.toFixed(2);
+            document.getElementById('xrpHoeveelheid').textContent = xrpLast.amount.toFixed(2) + ' XRP';
+
+            updateCharts(btcData, xrpData);
+        }
+
+        function updateCharts(btcData, xrpData) {
+            if (btcChart) btcChart.destroy();
+            const btcCtx = document.getElementById('btcChart').getContext('2d');
+            btcChart = new Chart(btcCtx, {
+                type: 'line',
+                data: {
+                    labels: btcData.map(d => d.datum),
+                    datasets: [{
+                        label: 'Inleg',
+                        data: btcData.map(d => d.cumulatief),
+                        borderColor: '#6b7280',
+                        backgroundColor: 'rgba(107, 114, 128, 0.1)',
+                        tension: 0.1
+                    }, {
+                        label: 'Waarde',
+                        data: btcData.map(d => d.waarde),
+                        borderColor: '#F7931A',
+                        backgroundColor: 'rgba(247, 147, 26, 0.1)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: { legend: { display: true } },
+                    scales: { y: { beginAtZero: false } }
+                }
+            });
+
+            if (xrpChart) xrpChart.destroy();
+            const xrpCtx = document.getElementById('xrpChart').getContext('2d');
+            xrpChart = new Chart(xrpCtx, {
+                type: 'line',
+                data: {
+                    labels: xrpData.map(d => d.datum),
+                    datasets: [{
+                        label: 'Inleg',
+                        data: xrpData.map(d => d.cumulatief),
+                        borderColor: '#6b7280',
+                        backgroundColor: 'rgba(107, 114, 128, 0.1)',
+                        tension: 0.1
+                    }, {
+                        label: 'Waarde',
+                        data: xrpData.map(d => d.waarde),
+                        borderColor: '#F7931A',
+                        backgroundColor: 'rgba(247, 147, 26, 0.1)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: { legend: { display: true } },
+                    scales: { y: { beginAtZero: false } }
+                }
+            });
+
+            if (rendementChart) rendementChart.destroy();
+            const rendCtx = document.getElementById('rendementChart').getContext('2d');
+            const allDates = btcData.map(d => d.datum);
+            
+            rendementChart = new Chart(rendCtx, {
+                type: 'line',
+                data: {
+                    labels: allDates,
+                    datasets: [{
+                        label: 'BTC %',
+                        data: btcData.map(d => d.rendement),
+                        borderColor: '#F7931A',
+                        backgroundColor: 'rgba(247, 147, 26, 0.1)',
+                        tension: 0.1,
+                        borderWidth: 2
+                    }, {
+                        label: 'XRP %',
+                        data: allDates.map(date => {
+                            const xrpPoint = xrpData.find(d => d.datum === date);
+                            return xrpPoint ? xrpPoint.rendement : null;
+                        }),
+                        borderColor: '#23292F',
+                        backgroundColor: 'rgba(35, 41, 47, 0.1)',
+                        tension: 0.1,
+                        borderWidth: 2,
+                        spanGaps: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: { 
+                        legend: { display: true },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + (context.parsed.y ? context.parsed.y.toFixed(1) + '%' : 'N/A');
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function exportToExcel() {
+            const wb = XLSX.utils.book_new();
+
+            const btcTransactiesData = [['Datum', 'Bedrag (€)', 'Hoeveelheid (BTC)', 'Koers (€)']];
+            btcTransactions.forEach(t => {
+                btcTransactiesData.push([t.datum, t.bedrag, t.hoeveelheid, t.koers]);
+            });
+            const ws1 = XLSX.utils.aoa_to_sheet(btcTransactiesData);
+            XLSX.utils.book_append_sheet(wb, ws1, 'BTC Transacties');
+
+            const xrpTransactiesData = [['Datum', 'Bedrag (€)', 'Hoeveelheid (XRP)', 'Koers (€)']];
+            xrpTransactions.forEach(t => {
+                xrpTransactiesData.push([t.datum, t.bedrag, t.hoeveelheid, t.koers]);
+            });
+            const ws2 = XLSX.utils.aoa_to_sheet(xrpTransactiesData);
+            XLSX.utils.book_append_sheet(wb, ws2, 'XRP Transacties');
+
+            const snapshotsData = [['Datum', 'BTC Koers (€)', 'XRP Koers (€)']];
+            priceSnapshots.forEach(s => {
+                snapshotsData.push([s.datum, s.btcKoers, s.xrpKoers]);
+            });
+            const ws3 = XLSX.utils.aoa_to_sheet(snapshotsData);
+            XLSX.utils.book_append_sheet(wb, ws3, 'Koers Snapshots');
+
+            const btcData = calculateData(btcTransactions, currentBtcPrice, 'BTC');
+            const xrpData = calculateData(xrpTransactions, currentXrpPrice, 'XRP');
+            const btcLast = btcData[btcData.length - 1];
+            const xrpLast = xrpData[xrpData.length - 1];
+
+            const portfolioData = [
+                ['Metric', 'BTC', 'XRP', 'Totaal'],
+                ['Totale Inleg (€)', btcLast.cumulatief, xrpLast.cumulatief, btcLast.cumulatief + xrpLast.cumulatief],
+                ['Huidige Waarde (€)', btcLast.waarde, xrpLast.waarde, btcLast.waarde + xrpLast.waarde],
+                ['Rendement (€)', btcLast.waarde - btcLast.cumulatief, xrpLast.waarde - xrpLast.cumulatief, (btcLast.waarde + xrpLast.waarde) - (btcLast.cumulatief + xrpLast.cumulatief)],
+                ['Rendement (%)', btcLast.rendement, xrpLast.rendement, ((btcLast.waarde + xrpLast.waarde) / (btcLast.cumulatief + xrpLast.cumulatief) - 1) * 100],
+                ['Totale Hoeveelheid', btcLast.amount, xrpLast.amount, '-'],
+                ['Gem. Aankoopprijs (€)', btcLast.cumulatief / btcLast.amount, xrpLast.cumulatief / xrpLast.amount, '-'],
+                ['Huidige Koers (€)', currentBtcPrice, currentXrpPrice, '-']
+            ];
+            const ws4 = XLSX.utils.aoa_to_sheet(portfolioData);
+            XLSX.utils.book_append_sheet(wb, ws4, 'Portfolio Overzicht');
+
+            const today = new Date().toISOString().split('T')[0];
+            const filename = `Crypto_DCA_Dashboard_${today}.xlsx`;
+            XLSX.writeFile(wb, filename);
+        }
+
+        // Initialize
+        window.addEventListener('load', function() {
+            document.getElementById('inputDatum').value = new Date().toISOString().split('T')[0];
+            document.getElementById('snapshotDatum').value = new Date().toISOString().split('T')[0];
+            
+            updateStatus('Verbinden...', 'gray');
+            
+            // Load default data first
+            loadDefaultData();
+            updateDashboard();
+            updateTransactionLists();
+            
+            // Auto-initialize Firebase with pre-configured settings
+            initializeFirebase();
+        });
+    </script>
+</body>
+</html>
