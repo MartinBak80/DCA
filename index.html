@@ -89,6 +89,25 @@
             <div class="mb-6 md:mb-8">
                 <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-2">Crypto DCA Dashboard</h1>
                 <p class="text-gray-600 text-sm md:text-base">Overzicht van je Bitcoin en XRP investeringen</p>
+                
+                <!-- Live Price Ticker -->
+                <div class="mt-3 flex flex-wrap items-center gap-4 bg-white rounded-lg p-3 shadow-sm">
+                    <div class="flex items-center gap-2">
+                        <span class="text-orange-500 font-bold">₿ BTC:</span>
+                        <span id="liveBtcPrice" class="font-semibold text-gray-900">€--,---</span>
+                        <span id="btcChange" class="text-xs"></span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-gray-800 font-bold">⊗ XRP:</span>
+                        <span id="liveXrpPrice" class="font-semibold text-gray-900">€--.--</span>
+                        <span id="xrpChange" class="text-xs"></span>
+                    </div>
+                    <div class="ml-auto flex items-center gap-2 text-xs text-gray-500">
+                        <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse" id="apiStatus"></span>
+                        <span id="lastUpdate">Laden...</span>
+                    </div>
+                </div>
+                
                 <div id="syncStatus" class="mt-2 text-sm flex items-center gap-3 flex-wrap">
                     <span class="inline-flex items-center gap-2">
                         <span class="w-2 h-2 rounded-full bg-gray-400" id="statusDot"></span>
@@ -168,8 +187,11 @@
             <div id="inputContent" class="hidden">
                 <!-- Current Prices -->
                 <div class="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6">
-                    <h2 class="text-xl md:text-2xl font-bold text-gray-900 mb-4">Huidige Koersen</h2>
-                    <p class="text-sm text-gray-600 mb-4">Dagelijkse snapshot van koersen</p>
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl md:text-2xl font-bold text-gray-900">Historische Koersen</h2>
+                        <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">✨ Automatisch opgeslagen</span>
+                    </div>
+                    <p class="text-sm text-gray-600 mb-4">Dagelijkse koersen worden automatisch opgeslagen. Handmatig opslaan alleen voor correcties of oude data.</p>
                     
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                         <div>
@@ -177,17 +199,17 @@
                             <input type="date" id="snapshotDatum" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">BTC Koers (€)</label>
-                            <input type="number" step="0.01" placeholder="60576.69" id="huidigebtcKoers" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">BTC Koers (€) - Optioneel</label>
+                            <input type="number" step="0.01" placeholder="Automatisch" id="huidigebtcKoers" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">XRP Koers (€)</label>
-                            <input type="number" step="0.01" placeholder="1.23" id="huidigexrpKoers" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">XRP Koers (€) - Optioneel</label>
+                            <input type="number" step="0.01" placeholder="Automatisch" id="huidigexrpKoers" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                         </div>
                     </div>
 
                     <button onclick="updateCurrentPrices()" class="w-full bg-green-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors">
-                        💰 Koersen Opslaan
+                        💾 Handmatig Koers Opslaan
                     </button>
                 </div>
 
@@ -292,6 +314,165 @@
         let currentXrpPrice = 1.23;
         let priceSnapshots = [];
         let btcChart, xrpChart, rendementChart;
+        
+        // Price tracking
+        let lastBtcPrice = 0;
+        let lastXrpPrice = 0;
+        let priceUpdateInterval = null;
+
+        // CoinGecko API - Free, no API key needed!
+        async function fetchLivePrices() {
+            try {
+                const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ripple&vs_currencies=eur&include_24hr_change=true');
+                const data = await response.json();
+                
+                if (data.bitcoin && data.ripple) {
+                    // Update prices
+                    lastBtcPrice = currentBtcPrice;
+                    lastXrpPrice = currentXrpPrice;
+                    
+                    currentBtcPrice = data.bitcoin.eur;
+                    currentXrpPrice = data.ripple.eur;
+                    
+                    // Update UI
+                    updateLivePriceTicker(data);
+                    
+                    // Auto-save daily snapshot
+                    await autoSaveDailySnapshot();
+                    
+                    // Update dashboard with new prices
+                    updateDashboard();
+                    
+                    // Update Firebase
+                    saveCurrentPricesToFirebase();
+                    
+                    return true;
+                }
+            } catch (error) {
+                console.error('Error fetching prices:', error);
+                document.getElementById('apiStatus').className = 'w-2 h-2 rounded-full bg-red-500';
+                document.getElementById('lastUpdate').textContent = 'API fout';
+                return false;
+            }
+        }
+
+        function updateLivePriceTicker(data) {
+            // BTC Price
+            const btcPrice = data.bitcoin.eur;
+            const btcChange = data.bitcoin.eur_24h_change;
+            document.getElementById('liveBtcPrice').textContent = '€' + btcPrice.toLocaleString('nl-NL', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            
+            const btcChangeEl = document.getElementById('btcChange');
+            const btcArrow = btcChange >= 0 ? '↑' : '↓';
+            btcChangeEl.textContent = btcArrow + Math.abs(btcChange).toFixed(1) + '%';
+            btcChangeEl.className = btcChange >= 0 ? 'text-xs text-green-600 font-semibold' : 'text-xs text-red-600 font-semibold';
+            
+            // XRP Price
+            const xrpPrice = data.ripple.eur;
+            const xrpChange = data.ripple.eur_24h_change;
+            document.getElementById('liveXrpPrice').textContent = '€' + xrpPrice.toFixed(2);
+            
+            const xrpChangeEl = document.getElementById('xrpChange');
+            const xrpArrow = xrpChange >= 0 ? '↑' : '↓';
+            xrpChangeEl.textContent = xrpArrow + Math.abs(xrpChange).toFixed(1) + '%';
+            xrpChangeEl.className = xrpChange >= 0 ? 'text-xs text-green-600 font-semibold' : 'text-xs text-red-600 font-semibold';
+            
+            // Update status
+            document.getElementById('apiStatus').className = 'w-2 h-2 rounded-full bg-green-500 animate-pulse';
+            const now = new Date();
+            document.getElementById('lastUpdate').textContent = 'Bijgewerkt: ' + now.toLocaleTimeString('nl-NL', {hour: '2-digit', minute: '2-digit'});
+        }
+
+        async function autoSaveDailySnapshot() {
+            // Get today's date
+            const today = new Date().toISOString().split('T')[0];
+            
+            // Check if we already have a snapshot for today
+            const existingSnapshot = priceSnapshots.find(s => s.datum === today);
+            
+            if (!existingSnapshot) {
+                // Create new snapshot for today
+                const newSnapshot = {
+                    datum: today,
+                    btcKoers: currentBtcPrice,
+                    xrpKoers: currentXrpPrice
+                };
+                
+                priceSnapshots.push(newSnapshot);
+                priceSnapshots.sort((a, b) => new Date(a.datum) - new Date(b.datum));
+                
+                // Save to Firebase
+                saveToFirebase();
+                
+                console.log('✅ Daily snapshot saved for', today, 'BTC:', currentBtcPrice, 'XRP:', currentXrpPrice);
+            }
+            // If snapshot exists, don't update it - we want the opening price, not latest price
+        }
+
+        async function backfillHistoricalPrices() {
+            // Get all unique dates from transactions
+            const allDates = new Set();
+            btcTransactions.forEach(t => allDates.add(t.datum));
+            xrpTransactions.forEach(t => allDates.add(t.datum));
+            
+            // Check which dates are missing snapshots
+            const missingDates = Array.from(allDates).filter(date => {
+                return !priceSnapshots.find(s => s.datum === date);
+            });
+            
+            if (missingDates.length === 0) {
+                console.log('✅ All historical snapshots present');
+                return;
+            }
+            
+            console.log(`📊 Backfilling ${missingDates.length} missing snapshots...`);
+            
+            // For missing dates, use transaction prices as best estimate
+            missingDates.forEach(date => {
+                const btcTx = btcTransactions.find(t => t.datum === date);
+                const xrpTx = xrpTransactions.find(t => t.datum === date);
+                
+                const snapshot = {
+                    datum: date,
+                    btcKoers: btcTx ? btcTx.koers : currentBtcPrice,
+                    xrpKoers: xrpTx ? xrpTx.koers : currentXrpPrice
+                };
+                
+                priceSnapshots.push(snapshot);
+            });
+            
+            priceSnapshots.sort((a, b) => new Date(a.datum) - new Date(b.datum));
+            saveToFirebase();
+            
+            console.log('✅ Backfill complete!');
+        }
+
+        function saveCurrentPricesToFirebase() {
+            if (!database || !window.dbSet || !window.dbRef) return;
+            
+            const { ref, set } = window.firebaseModules;
+            set(ref(database, 'currentPrices'), {
+                btc: currentBtcPrice,
+                xrp: currentXrpPrice,
+                lastUpdate: new Date().toISOString()
+            });
+        }
+
+        // Start price updates
+        function startPriceUpdates() {
+            // Initial fetch
+            fetchLivePrices();
+            
+            // Update every 30 seconds
+            priceUpdateInterval = setInterval(fetchLivePrices, 30000);
+        }
+
+        function stopPriceUpdates() {
+            if (priceUpdateInterval) {
+                clearInterval(priceUpdateInterval);
+                priceUpdateInterval = null;
+            }
+        }
 
         // Load Firebase config from localStorage
         function loadFirebaseConfig() {
@@ -771,20 +952,26 @@
         function calculateData(transactions, currentPrice, crypto) {
             let cumulatief = 0;
             let cumulatiefHoeveelheid = 0;
+            const today = new Date().toISOString().split('T')[0];
             
             return transactions.map((t, index) => {
                 cumulatief += t.bedrag;
                 cumulatiefHoeveelheid += t.hoeveelheid;
                 
-                const snapshot = priceSnapshots.find(s => s.datum === t.datum);
                 let priceToUse;
                 
-                if (snapshot) {
-                    priceToUse = crypto === 'BTC' ? snapshot.btcKoers : snapshot.xrpKoers;
-                } else if (index === transactions.length - 1) {
+                // For today's date, ALWAYS use live price
+                if (t.datum === today) {
                     priceToUse = currentPrice;
                 } else {
-                    priceToUse = t.koers;
+                    // For historical dates, use snapshot if available
+                    const snapshot = priceSnapshots.find(s => s.datum === t.datum);
+                    if (snapshot) {
+                        priceToUse = crypto === 'BTC' ? snapshot.btcKoers : snapshot.xrpKoers;
+                    } else {
+                        // No snapshot? Use transaction price
+                        priceToUse = t.koers;
+                    }
                 }
                 
                 const waarde = cumulatiefHoeveelheid * priceToUse;
@@ -795,7 +982,8 @@
                     cumulatief: cumulatief,
                     waarde: waarde,
                     rendement: rendement,
-                    amount: cumulatiefHoeveelheid
+                    amount: cumulatiefHoeveelheid,
+                    priceUsed: priceToUse // For debugging
                 };
             });
         }
@@ -996,6 +1184,19 @@
             
             // Auto-initialize Firebase with pre-configured settings
             initializeFirebase();
+            
+            // Start live price updates
+            startPriceUpdates();
+            
+            // Backfill historical prices after a short delay
+            setTimeout(() => {
+                backfillHistoricalPrices();
+            }, 2000);
+        });
+        
+        // Stop updates when page closes
+        window.addEventListener('beforeunload', function() {
+            stopPriceUpdates();
         });
     </script>
 </body>
