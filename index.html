@@ -664,6 +664,7 @@
                 if (snapshot.exists()) {
                     cashTransactions = snapshot.val() || [];
                     updateDashboard();
+                    updateCashChart(); // Explicitly update cash chart
                 }
             });
         }
@@ -724,6 +725,11 @@
                 
                 updateDashboard();
                 updateTransactionLists();
+                
+                // Explicitly update cash chart if we have cash data
+                if (cashTransactions.length > 0) {
+                    updateCashChart();
+                }
             }).catch(error => {
                 console.error('Error loading from Firebase:', error);
                 console.log('⚠️ Loading defaults due to error');
