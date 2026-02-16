@@ -1005,7 +1005,9 @@
                 };
             });
             
-            if (window.cashChart) window.cashChart.destroy();
+            if (window.cashChart && typeof window.cashChart.destroy === 'function') {
+                window.cashChart.destroy();
+            }
             
             const ctx = document.getElementById('cashChart');
             if (!ctx) return;
