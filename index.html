@@ -135,11 +135,16 @@
             <!-- Dashboard Content -->
             <div id="dashboardContent">
                 <!-- Stats Cards -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 mb-6 md:mb-8">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 md:gap-6 mb-6 md:mb-8">
+                    <div class="bg-white rounded-lg shadow-md p-4 md:p-6 border-l-4 border-green-600">
+                        <p class="text-xs md:text-sm font-medium text-gray-600">💰 Cash Saldo</p>
+                        <p class="text-xl md:text-2xl font-bold text-gray-900 mt-2" id="cashSaldo">€0.00</p>
+                        <p class="text-xs md:text-sm text-gray-500 mt-1">Beschikbaar</p>
+                    </div>
                     <div class="bg-white rounded-lg shadow-md p-4 md:p-6 border-l-4 border-blue-600">
                         <p class="text-xs md:text-sm font-medium text-gray-600">Totale Inleg</p>
                         <p class="text-xl md:text-2xl font-bold text-gray-900 mt-2" id="totaleInleg">€0.00</p>
-                        <p class="text-xs md:text-sm text-gray-500 mt-1">Cumulatief</p>
+                        <p class="text-xs md:text-sm text-gray-500 mt-1">In crypto</p>
                     </div>
                     <div class="bg-white rounded-lg shadow-md p-4 md:p-6 border-l-4 border-purple-600">
                         <p class="text-xs md:text-sm font-medium text-gray-600">Huidige Waarde</p>
@@ -181,10 +186,43 @@
                         <canvas id="rendementChart"></canvas>
                     </div>
                 </div>
+
+                <div class="grid grid-cols-1 gap-4 md:gap-6 mb-6 md:mb-8">
+                    <div class="bg-white rounded-lg shadow-md p-4 md:p-6">
+                        <h3 class="text-base md:text-lg font-semibold text-gray-900 mb-4">💰 Cash Flow - Funding & Trading</h3>
+                        <canvas id="cashChart"></canvas>
+                    </div>
+                </div>
             </div>
 
             <!-- Input Content -->
             <div id="inputContent" class="hidden">
+                <!-- Cash Management -->
+                <div class="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6 border-l-4 border-green-600">
+                    <h2 class="text-xl md:text-2xl font-bold text-gray-900 mb-4">💰 Cash Management</h2>
+                    <p class="text-sm text-gray-600 mb-4">Voeg wekelijkse funding toe (bijv. €140) of verkoop crypto voor cash</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Datum</label>
+                            <input type="date" id="cashDatum" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Bedrag (€)</label>
+                            <input type="number" step="0.01" placeholder="140.00" id="cashBedrag" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <button onclick="addCashFunding()" class="bg-green-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors">
+                            💵 Cash Toevoegen
+                        </button>
+                        <button onclick="sellCryptoPrompt()" class="bg-orange-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-orange-700 transition-colors">
+                            📤 Crypto Verkopen
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Current Prices -->
                 <div class="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6">
                     <div class="flex items-center justify-between mb-4">
@@ -313,7 +351,10 @@
         let currentBtcPrice = 60576.69;
         let currentXrpPrice = 1.23;
         let priceSnapshots = [];
-        let btcChart, xrpChart, rendementChart;
+        let btcChart, xrpChart, rendementChart, cashChart;
+        
+        // Cash Management - NEW
+        let cashTransactions = []; // {datum, type: 'funding'|'buy'|'sell', bedrag, crypto?, notes?}
         
         // Price tracking
         let lastBtcPrice = 0;
@@ -618,6 +659,13 @@
                     updateDashboard();
                 }
             });
+            
+            onValue(ref(database, 'cashTransactions'), (snapshot) => {
+                if (snapshot.exists()) {
+                    cashTransactions = snapshot.val() || [];
+                    updateDashboard();
+                }
+            });
         }
 
         function loadFromFirebase() {
@@ -636,8 +684,9 @@
                 get(ref(database, 'btcTransactions')),
                 get(ref(database, 'xrpTransactions')),
                 get(ref(database, 'priceSnapshots')),
-                get(ref(database, 'currentPrices'))
-            ]).then(([btcSnap, xrpSnap, snapSnap, pricesSnap]) => {
+                get(ref(database, 'currentPrices')),
+                get(ref(database, 'cashTransactions'))
+            ]).then(([btcSnap, xrpSnap, snapSnap, pricesSnap, cashSnap]) => {
                 let hasFirebaseData = false;
                 
                 if (btcSnap.exists() && btcSnap.val().length > 0) {
@@ -658,6 +707,10 @@
                     const prices = pricesSnap.val();
                     currentBtcPrice = prices.btc || currentBtcPrice;
                     currentXrpPrice = prices.xrp || currentXrpPrice;
+                }
+                if (cashSnap.exists()) {
+                    cashTransactions = cashSnap.val() || [];
+                    console.log(`✅ Loaded ${cashTransactions.length} cash transactions from Firebase`);
                 }
                 
                 // If no data in Firebase, load defaults and upload them
@@ -688,7 +741,8 @@
                     xrpTransactions,
                     currentBtcPrice,
                     currentXrpPrice,
-                    priceSnapshots
+                    priceSnapshots,
+                    cashTransactions
                 };
                 localStorage.setItem('cryptoData', JSON.stringify(data));
                 return;
@@ -703,6 +757,7 @@
                 btc: currentBtcPrice,
                 xrp: currentXrpPrice
             });
+            set(ref(database, 'cashTransactions'), cashTransactions);
         }
 
         function updateStatus(text, color) {
@@ -724,34 +779,49 @@
         }
 
         function loadDefaultData() {
+            // REAL DATA RECOVERED from Excel backup (Feb 13, 2026)
+            // 22 BTC transactions + 9 XRP transactions = €600 total
             btcTransactions = [
-                { datum: '2026-01-23', bedrag: 15, hoeveelheid: 15 / 77708.13, koers: 77708.13 },
-                { datum: '2026-01-24', bedrag: 15, hoeveelheid: 15 / 77081.19, koers: 77081.19 },
-                { datum: '2026-01-25', bedrag: 15, hoeveelheid: 15 / 76421.44, koers: 76421.44 },
-                { datum: '2026-01-26', bedrag: 15, hoeveelheid: 15 / 75316.33, koers: 75316.33 },
-                { datum: '2026-01-27', bedrag: 30, hoeveelheid: 30 / 75882.13, koers: 75882.13 },
-                { datum: '2026-01-28', bedrag: 30, hoeveelheid: 30 / 75765.23, koers: 75765.23 },
-                { datum: '2026-01-29', bedrag: 30, hoeveelheid: 30 / 74970.01, koers: 74970.01 },
-                { datum: '2026-01-30', bedrag: 30, hoeveelheid: 30 / 70581.59, koers: 70581.59 },
-                { datum: '2026-01-31', bedrag: 30, hoeveelheid: 30 / 71833.92, koers: 71833.92 },
-                { datum: '2026-02-01', bedrag: 30, hoeveelheid: 30 / 67558.44, koers: 67558.44 },
-                { datum: '2026-02-02', bedrag: 30, hoeveelheid: 30 / 65934.07, koers: 65934.07 },
-                { datum: '2026-02-03', bedrag: 30, hoeveelheid: 30 / 67931.71, koers: 67931.71 },
-                { datum: '2026-02-04', bedrag: 30, hoeveelheid: 30 / 65835.67, koers: 65835.67 },
-                { datum: '2026-02-05', bedrag: 15, hoeveelheid: 15 / 61082.38, koers: 61082.38 },
-                { datum: '2026-02-06', bedrag: 15, hoeveelheid: 15 / 55870.08, koers: 55870.08 },
-                { datum: '2026-02-07', bedrag: 15, hoeveelheid: 15 / 58676.26, koers: 58676.26 },
-                { datum: '2026-02-08', bedrag: 15, hoeveelheid: 15 / 60211.95, koers: 60211.95 },
-                { datum: '2026-02-09', bedrag: 15, hoeveelheid: 15 / 60576.69, koers: 60576.69 }
+                { datum: '2026-01-23', bedrag: 15.0, hoeveelheid: 0.00019302999570315228, koers: 77708.13 },
+                { datum: '2026-01-24', bedrag: 15.0, hoeveelheid: 0.00019460000552664014, koers: 77081.19 },
+                { datum: '2026-01-25', bedrag: 15.0, hoeveelheid: 0.00019627999681764698, koers: 76421.44 },
+                { datum: '2026-01-26', bedrag: 15.0, hoeveelheid: 0.0001991599962451702, koers: 75316.33 },
+                { datum: '2026-01-27', bedrag: 30.0, hoeveelheid: 0.00039534999874146916, koers: 75882.13 },
+                { datum: '2026-01-28', bedrag: 30.0, hoeveelheid: 0.00039595999378606785, koers: 75765.23 },
+                { datum: '2026-01-29', bedrag: 30.0, hoeveelheid: 0.00040016001064959177, koers: 74970.01 },
+                { datum: '2026-01-30', bedrag: 30.0, hoeveelheid: 0.0004250400139753157, koers: 70581.59 },
+                { datum: '2026-01-31', bedrag: 30.0, hoeveelheid: 0.0004176999977883354, koers: 71833.92 },
+                { datum: '2026-02-01', bedrag: 30.0, hoeveelheid: 0.0004440500110991169, koers: 67558.44 },
+                { datum: '2026-02-02', bedrag: 30.0, hoeveelheid: 0.00045504001127998655, koers: 65934.07 },
+                { datum: '2026-02-03', bedrag: 30.0, hoeveelheid: 0.0004416399951011036, koers: 67931.71 },
+                { datum: '2026-02-04', bedrag: 30.0, hoeveelheid: 0.00045570001146928085, koers: 65835.67 },
+                { datum: '2026-02-05', bedrag: 15.0, hoeveelheid: 0.00024558000685646813, koers: 61082.38 },
+                { datum: '2026-02-06', bedrag: 15.0, hoeveelheid: 0.00026853000668883836, koers: 55870.08 },
+                { datum: '2026-02-07', bedrag: 15.0, hoeveelheid: 0.00025567000521588697, koers: 58676.26 },
+                { datum: '2026-02-08', bedrag: 15.0, hoeveelheid: 0.0002491099952651325, koers: 60211.95 },
+                { datum: '2026-02-09', bedrag: 15.0, hoeveelheid: 0.0002475800001434401, koers: 60576.69 },
+                { datum: '2026-02-10', bedrag: 15.0, hoeveelheid: 0.00026134001152034686, koers: 57390.37 },
+                { datum: '2026-02-11', bedrag: 15.0, hoeveelheid: 0.00024743000883330847, koers: 60625.63 },
+                { datum: '2026-02-12', bedrag: 15.0, hoeveelheid: 0.00021996000632119796, koers: 68196.21 },
+                { datum: '2026-02-13', bedrag: 15.0, hoeveelheid: 0.00021892000718517233, koers: 68530.70 }
             ];
 
             xrpTransactions = [
-                { datum: '2026-02-05', bedrag: 15, hoeveelheid: 15 / 1.24, koers: 1.24 },
-                { datum: '2026-02-06', bedrag: 15, hoeveelheid: 15 / 1.12, koers: 1.12 },
-                { datum: '2026-02-07', bedrag: 15, hoeveelheid: 15 / 1.22, koers: 1.22 },
-                { datum: '2026-02-08', bedrag: 15, hoeveelheid: 15 / 1.23, koers: 1.23 },
-                { datum: '2026-02-09', bedrag: 15, hoeveelheid: 15 / 1.23, koers: 1.23 }
+                { datum: '2026-02-05', bedrag: 15.0, hoeveelheid: 12.195122409145953, koers: 1.23 },
+                { datum: '2026-02-06', bedrag: 15.0, hoeveelheid: 12.295081970697095, koers: 1.22 },
+                { datum: '2026-02-07', bedrag: 15.0, hoeveelheid: 12.295081970697095, koers: 1.22 },
+                { datum: '2026-02-08', bedrag: 15.0, hoeveelheid: 12.396693995095123, koers: 1.21 },
+                { datum: '2026-02-09', bedrag: 15.0, hoeveelheid: 12.295081970697095, koers: 1.22 },
+                { datum: '2026-02-10', bedrag: 15.0, hoeveelheid: 12.295081970697095, koers: 1.22 },
+                { datum: '2026-02-11', bedrag: 15.0, hoeveelheid: 12.810256524421693, koers: 1.17 },
+                { datum: '2026-02-12', bedrag: 15.0, hoeveelheid: 12.810256524421693, koers: 1.17 },
+                { datum: '2026-02-13', bedrag: 15.0, hoeveelheid: 12.919895718419598, koers: 1.16 }
             ];
+
+            // Initialize empty cash transactions (new cash management system)
+            cashTransactions = [];
+
+            console.log('✅ Loaded REAL data from Excel backup: 22 BTC + 9 XRP = €600 total');
         }
 
         // Export/Import functions
@@ -807,6 +877,179 @@
             input.click();
         }
 
+        // ========== CASH MANAGEMENT FUNCTIONS ==========
+        
+        function calculateCashBalance() {
+            let balance = 0;
+            const sorted = [...cashTransactions].sort((a, b) => new Date(a.datum) - new Date(b.datum));
+            
+            sorted.forEach(t => {
+                if (t.type === 'funding') balance += t.bedrag;
+                else if (t.type === 'buy') balance -= t.bedrag;
+                else if (t.type === 'sell') balance += t.bedrag;
+            });
+            
+            return balance;
+        }
+
+        function addCashFunding() {
+            const datum = document.getElementById('cashDatum').value;
+            const bedrag = parseFloat(document.getElementById('cashBedrag').value);
+            
+            if (!datum || !bedrag || bedrag <= 0) {
+                alert('Vul datum en bedrag in!');
+                return;
+            }
+            
+            cashTransactions.push({
+                datum,
+                type: 'funding',
+                bedrag,
+                notes: 'Wekelijkse funding'
+            });
+            
+            cashTransactions.sort((a, b) => new Date(a.datum) - new Date(b.datum));
+            
+            saveToFirebase();
+            updateDashboard();
+            
+            document.getElementById('cashBedrag').value = '';
+            
+            alert(`✅ €${bedrag.toFixed(2)} toegevoegd aan cash!`);
+        }
+
+        function sellCryptoPrompt() {
+            const crypto = prompt('Welke crypto verkopen? (BTC/XRP)');
+            if (!crypto || (crypto.toUpperCase() !== 'BTC' && crypto.toUpperCase() !== 'XRP')) {
+                alert('Ongeldige crypto. Kies BTC of XRP.');
+                return;
+            }
+            
+            const datum = prompt(`Verkoop ${crypto.toUpperCase()} - Datum (YYYY-MM-DD):`, new Date().toISOString().split('T')[0]);
+            if (!datum) return;
+            
+            const hoeveelheid = parseFloat(prompt(`Hoeveel ${crypto.toUpperCase()} verkopen?`));
+            if (!hoeveelheid || hoeveelheid <= 0) return;
+            
+            const koers = parseFloat(prompt(`Verkoopprijs per ${crypto.toUpperCase()} (€):`));
+            if (!koers || koers <= 0) return;
+            
+            const bedrag = hoeveelheid * koers;
+            
+            if (!confirm(`Verkopen:\n${hoeveelheid} ${crypto.toUpperCase()} @ €${koers.toFixed(2)}\n= €${bedrag.toFixed(2)}\n\nDoorgaan?`)) return;
+            
+            cashTransactions.push({
+                datum,
+                type: 'sell',
+                bedrag,
+                crypto: crypto.toUpperCase(),
+                notes: `${crypto.toUpperCase()} verkoop (${hoeveelheid} @ €${koers.toFixed(2)})`
+            });
+            
+            cashTransactions.sort((a, b) => new Date(a.datum) - new Date(b.datum));
+            
+            saveToFirebase();
+            updateDashboard();
+            
+            alert(`✅ €${bedrag.toFixed(2)} ontvangen van ${crypto.toUpperCase()} verkoop!`);
+        }
+
+        function updateCashChart() {
+            if (cashTransactions.length === 0) {
+                // Show empty chart
+                if (window.cashChart) window.cashChart.destroy();
+                const ctx = document.getElementById('cashChart');
+                if (!ctx) return;
+                
+                window.cashChart = new Chart(ctx.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: ['Start'],
+                        datasets: [{
+                            label: 'Cash Saldo (€)',
+                            data: [0],
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            tension: 0.1,
+                            borderWidth: 2,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: { legend: { display: true } },
+                        scales: { y: { beginAtZero: true } }
+                    }
+                });
+                return;
+            }
+            
+            const sorted = [...cashTransactions].sort((a, b) => new Date(a.datum) - new Date(b.datum));
+            
+            let balance = 0;
+            const cashData = sorted.map(t => {
+                if (t.type === 'funding') balance += t.bedrag;
+                else if (t.type === 'buy') balance -= t.bedrag;
+                else if (t.type === 'sell') balance += t.bedrag;
+                
+                return {
+                    datum: new Date(t.datum).toLocaleDateString('nl-NL', { day: '2-digit', month: 'short' }),
+                    balance: balance
+                };
+            });
+            
+            if (window.cashChart) window.cashChart.destroy();
+            
+            const ctx = document.getElementById('cashChart');
+            if (!ctx) return;
+            
+            window.cashChart = new Chart(ctx.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: cashData.map(d => d.datum),
+                    datasets: [{
+                        label: 'Cash Saldo (€)',
+                        data: cashData.map(d => d.balance),
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        tension: 0.1,
+                        borderWidth: 2,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: { 
+                        legend: { display: true },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return '€' + context.parsed.y.toFixed(2);
+                                }
+                            }
+                        }
+                    },
+                    scales: { 
+                        y: { 
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '€' + value;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // ========== END CASH MANAGEMENT FUNCTIONS ==========
+
+
         // Transaction functions
         function updateCurrentPrices() {
             const btcPrice = parseFloat(document.getElementById('huidigebtcKoers').value);
@@ -860,6 +1103,14 @@
                 return;
             }
 
+            // Check cash balance
+            const currentCash = calculateCashBalance();
+            if (currentCash < bedrag) {
+                if (!confirm(`⚠️ Onvoldoende cash!\n\nBeschikbaar: €${currentCash.toFixed(2)}\nNodig: €${bedrag.toFixed(2)}\n\nToch doorgaan?`)) {
+                    return;
+                }
+            }
+
             const koers = bedrag / hoeveelheid;
             const transaction = { datum, bedrag, hoeveelheid, koers };
 
@@ -871,13 +1122,24 @@
                 xrpTransactions.sort((a, b) => new Date(a.datum) - new Date(b.datum));
             }
 
+            // Deduct cash
+            cashTransactions.push({
+                datum,
+                type: 'buy',
+                bedrag,
+                crypto,
+                notes: `${crypto} aankoop`
+            });
+            cashTransactions.sort((a, b) => new Date(a.datum) - new Date(b.datum));
+
             document.getElementById('inputBedrag').value = '';
             document.getElementById('inputHoeveelheid').value = '';
             document.getElementById('koersPreview').classList.add('hidden');
 
             saveToFirebase();
+            updateDashboard();
             updateTransactionLists();
-            alert('Aankoop toegevoegd!');
+            alert('Aankoop toegevoegd! Cash: €' + calculateCashBalance().toFixed(2));
         }
 
         function deleteTransaction(index, crypto) {
@@ -1058,7 +1320,12 @@
             document.getElementById('xrpGemKoers').textContent = '€' + xrpGemKoers.toFixed(2);
             document.getElementById('xrpHoeveelheid').textContent = xrpLast.amount.toFixed(2) + ' XRP';
 
+            // Update cash balance
+            const cashBalance = calculateCashBalance();
+            document.getElementById('cashSaldo').textContent = '€' + cashBalance.toFixed(2);
+
             updateCharts(btcData, xrpData);
+            updateCashChart();
         }
 
         function updateCharts(btcData, xrpData) {
@@ -1214,6 +1481,7 @@
         window.addEventListener('load', function() {
             document.getElementById('inputDatum').value = new Date().toISOString().split('T')[0];
             document.getElementById('snapshotDatum').value = new Date().toISOString().split('T')[0];
+            document.getElementById('cashDatum').value = new Date().toISOString().split('T')[0];
             
             updateStatus('Verbinden...', 'gray');
             
