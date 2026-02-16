@@ -152,9 +152,12 @@
                         <p class="text-xs md:text-sm text-gray-500 mt-1">Portfolio waarde</p>
                     </div>
                     <div class="bg-white rounded-lg shadow-md p-4 md:p-6 border-l-4" id="rendementCard">
-                        <p class="text-xs md:text-sm font-medium text-gray-600">Totaal Rendement</p>
+                        <p class="text-xs md:text-sm font-medium text-gray-600">Total P&L</p>
                         <p class="text-xl md:text-2xl font-bold text-gray-900 mt-2" id="rendementBedrag">€0.00</p>
-                        <p class="text-xs md:text-sm mt-1" id="rendementPercentage">0.0%</p>
+                        <div class="mt-2 text-xs text-gray-600">
+                            <div>Realized: <span id="realizedPL" class="font-semibold">€0.00</span></div>
+                            <div>Unrealized: <span id="unrealizedPL" class="font-semibold">€0.00</span></div>
+                        </div>
                     </div>
                     <div class="bg-white rounded-lg shadow-md p-4 md:p-6 border-l-4 border-orange-500">
                         <p class="text-xs md:text-sm font-medium text-gray-600">Gem. Prijs BTC</p>
@@ -213,12 +216,9 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 gap-4">
                         <button onclick="addCashFunding()" class="bg-green-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors">
                             💵 Cash Toevoegen
-                        </button>
-                        <button onclick="sellCryptoPrompt()" class="bg-orange-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-orange-700 transition-colors">
-                            📤 Crypto Verkopen
                         </button>
                     </div>
                 </div>
@@ -285,6 +285,55 @@
 
                     <button onclick="addTransaction()" class="w-full bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors">
                         ➕ Aankoop Toevoegen
+                    </button>
+                </div>
+
+                <!-- Sell Form -->
+                <div class="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6 border-l-4 border-orange-600">
+                    <h2 class="text-xl md:text-2xl font-bold text-gray-900 mb-4">📤 Verkoop Crypto</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Datum</label>
+                            <input type="date" id="sellDatum" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Crypto</label>
+                            <select id="sellCrypto" onchange="updateSellHoldings()" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500">
+                                <option value="BTC">Bitcoin (BTC)</option>
+                                <option value="XRP">Ripple (XRP)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Hoeveelheid</label>
+                            <input type="number" step="0.00000001" placeholder="0.00024" id="sellHoeveelheid" oninput="updateSellPreview()" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500">
+                            <p class="text-xs text-gray-500 mt-1">Beschikbaar: <span id="availableHoldings" class="font-semibold text-green-600">0.00000000</span></p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Verkoopprijs (€)</label>
+                            <input type="number" step="0.01" placeholder="65000.00" id="sellKoers" oninput="updateSellPreview()" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500">
+                        </div>
+                    </div>
+
+                    <div id="sellPreview" class="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-lg hidden">
+                        <div class="grid grid-cols-3 gap-4 text-center">
+                            <div>
+                                <p class="text-xs text-gray-600">Ontvangst</p>
+                                <p class="text-lg font-bold text-orange-600" id="sellOntvangst">€0.00</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-600">Cost Basis</p>
+                                <p class="text-lg font-bold text-gray-700" id="sellCostBasis">€0.00</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-600">Winst/Verlies</p>
+                                <p class="text-lg font-bold" id="sellProfit">€0.00</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button onclick="sellCrypto()" class="w-full bg-orange-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-orange-700 transition-colors">
+                        📤 Verkopen
                     </button>
                 </div>
 
@@ -924,40 +973,146 @@
             alert(`✅ €${bedrag.toFixed(2)} toegevoegd aan cash!`);
         }
 
-        function sellCryptoPrompt() {
-            const crypto = prompt('Welke crypto verkopen? (BTC/XRP)');
-            if (!crypto || (crypto.toUpperCase() !== 'BTC' && crypto.toUpperCase() !== 'XRP')) {
-                alert('Ongeldige crypto. Kies BTC of XRP.');
+        // Calculate current holdings for a crypto
+        function calculateHoldings(crypto) {
+            const transactions = crypto === 'BTC' ? btcTransactions : xrpTransactions;
+            let holdings = 0;
+            transactions.forEach(t => {
+                if (t.type === 'sell') {
+                    holdings -= t.hoeveelheid;
+                } else {
+                    holdings += t.hoeveelheid;
+                }
+            });
+            return holdings;
+        }
+
+        // Update available holdings display
+        function updateSellHoldings() {
+            const crypto = document.getElementById('sellCrypto').value;
+            const holdings = calculateHoldings(crypto);
+            const decimals = crypto === 'BTC' ? 8 : 2;
+            document.getElementById('availableHoldings').textContent = holdings.toFixed(decimals) + ' ' + crypto;
+            updateSellPreview();
+        }
+
+        // Update sell preview with profit calculation
+        function updateSellPreview() {
+            const crypto = document.getElementById('sellCrypto').value;
+            const hoeveelheid = parseFloat(document.getElementById('sellHoeveelheid').value) || 0;
+            const koers = parseFloat(document.getElementById('sellKoers').value) || 0;
+            
+            if (hoeveelheid <= 0 || koers <= 0) {
+                document.getElementById('sellPreview').classList.add('hidden');
                 return;
             }
             
-            const datum = prompt(`Verkoop ${crypto.toUpperCase()} - Datum (YYYY-MM-DD):`, new Date().toISOString().split('T')[0]);
-            if (!datum) return;
+            const bedrag = hoeveelheid * koers;
             
-            const hoeveelheid = parseFloat(prompt(`Hoeveel ${crypto.toUpperCase()} verkopen?`));
-            if (!hoeveelheid || hoeveelheid <= 0) return;
+            // Calculate cost basis (FIFO)
+            const transactions = crypto === 'BTC' ? btcTransactions : xrpTransactions;
+            let remainingToSell = hoeveelheid;
+            let totalCost = 0;
             
-            const koers = parseFloat(prompt(`Verkoopprijs per ${crypto.toUpperCase()} (€):`));
-            if (!koers || koers <= 0) return;
+            for (let t of transactions) {
+                if (t.type === 'sell') continue;
+                if (remainingToSell <= 0) break;
+                
+                const sellFromThis = Math.min(remainingToSell, t.hoeveelheid);
+                totalCost += sellFromThis * t.koers;
+                remainingToSell -= sellFromThis;
+            }
+            
+            const profit = bedrag - totalCost;
+            
+            document.getElementById('sellOntvangst').textContent = '€' + bedrag.toFixed(2);
+            document.getElementById('sellCostBasis').textContent = '€' + totalCost.toFixed(2);
+            document.getElementById('sellProfit').textContent = '€' + profit.toFixed(2);
+            document.getElementById('sellProfit').className = 'text-lg font-bold ' + (profit >= 0 ? 'text-green-600' : 'text-red-600');
+            
+            document.getElementById('sellPreview').classList.remove('hidden');
+        }
+
+        // Sell crypto using form
+        function sellCrypto() {
+            const datum = document.getElementById('sellDatum').value;
+            const crypto = document.getElementById('sellCrypto').value;
+            const hoeveelheid = parseFloat(document.getElementById('sellHoeveelheid').value);
+            const koers = parseFloat(document.getElementById('sellKoers').value);
+            
+            if (!datum || !hoeveelheid || !koers || hoeveelheid <= 0 || koers <= 0) {
+                alert('Vul alle velden correct in!');
+                return;
+            }
+            
+            // Check holdings
+            const holdings = calculateHoldings(crypto);
+            if (hoeveelheid > holdings) {
+                alert(`❌ Onvoldoende ${crypto}!\n\nBeschikbaar: ${holdings.toFixed(crypto === 'BTC' ? 8 : 2)} ${crypto}\nGevraagd: ${hoeveelheid.toFixed(crypto === 'BTC' ? 8 : 2)} ${crypto}`);
+                return;
+            }
             
             const bedrag = hoeveelheid * koers;
             
-            if (!confirm(`Verkopen:\n${hoeveelheid} ${crypto.toUpperCase()} @ €${koers.toFixed(2)}\n= €${bedrag.toFixed(2)}\n\nDoorgaan?`)) return;
+            // Calculate cost basis (FIFO)
+            const transactions = crypto === 'BTC' ? btcTransactions : xrpTransactions;
+            let remainingToSell = hoeveelheid;
+            let totalCost = 0;
             
+            for (let t of transactions) {
+                if (t.type === 'sell') continue;
+                if (remainingToSell <= 0) break;
+                
+                const sellFromThis = Math.min(remainingToSell, t.hoeveelheid);
+                totalCost += sellFromThis * t.koers;
+                remainingToSell -= sellFromThis;
+            }
+            
+            const profit = bedrag - totalCost;
+            
+            if (!confirm(`Verkopen:\n\n${hoeveelheid.toFixed(crypto === 'BTC' ? 8 : 2)} ${crypto} @ €${koers.toFixed(2)}\n= €${bedrag.toFixed(2)} ontvangen\n\nCost basis: €${totalCost.toFixed(2)}\nProfit: €${profit.toFixed(2)}\n\nDoorgaan?`)) {
+                return;
+            }
+            
+            // Add SELL transaction
+            const sellTransaction = {
+                datum,
+                bedrag,
+                hoeveelheid,
+                koers,
+                type: 'sell',
+                profit: profit
+            };
+            
+            if (crypto === 'BTC') {
+                btcTransactions.push(sellTransaction);
+                btcTransactions.sort((a, b) => new Date(a.datum) - new Date(b.datum));
+            } else {
+                xrpTransactions.push(sellTransaction);
+                xrpTransactions.sort((a, b) => new Date(a.datum) - new Date(b.datum));
+            }
+            
+            // Add cash from sale
             cashTransactions.push({
                 datum,
                 type: 'sell',
                 bedrag,
-                crypto: crypto.toUpperCase(),
-                notes: `${crypto.toUpperCase()} verkoop (${hoeveelheid} @ €${koers.toFixed(2)})`
+                crypto,
+                notes: `${crypto} verkoop (${hoeveelheid.toFixed(crypto === 'BTC' ? 8 : 2)} @ €${koers.toFixed(2)}) - Profit: €${profit.toFixed(2)}`
             });
-            
             cashTransactions.sort((a, b) => new Date(a.datum) - new Date(b.datum));
+            
+            // Clear form
+            document.getElementById('sellHoeveelheid').value = '';
+            document.getElementById('sellKoers').value = '';
+            document.getElementById('sellPreview').classList.add('hidden');
             
             saveToFirebase();
             updateDashboard();
+            updateTransactionLists();
+            updateSellHoldings();
             
-            alert(`✅ €${bedrag.toFixed(2)} ontvangen van ${crypto.toUpperCase()} verkoop!`);
+            alert(`✅ Verkocht!\n\n€${bedrag.toFixed(2)} cash ontvangen\nRealized profit: €${profit.toFixed(2)}\n\nNieuw ${crypto} holdings: ${(holdings - hoeveelheid).toFixed(crypto === 'BTC' ? 8 : 2)}`);
         }
 
         function updateCashChart() {
@@ -1120,7 +1275,13 @@
             }
 
             const koers = bedrag / hoeveelheid;
-            const transaction = { datum, bedrag, hoeveelheid, koers };
+            const transaction = { 
+                datum, 
+                bedrag, 
+                hoeveelheid, 
+                koers,
+                type: 'buy'  // NEW: Track transaction type
+            };
 
             if (crypto === 'BTC') {
                 btcTransactions.push(transaction);
@@ -1151,13 +1312,32 @@
         }
 
         function deleteTransaction(index, crypto) {
-            if (confirm('Weet je zeker dat je deze aankoop wilt verwijderen?')) {
+            const transaction = crypto === 'BTC' ? btcTransactions[index] : xrpTransactions[index];
+            const isSell = transaction.type === 'sell';
+            const actionType = isSell ? 'verkoop' : 'aankoop';
+            
+            if (confirm(`Weet je zeker dat je deze ${actionType} wilt verwijderen?`)) {
+                // Find and remove associated cash transaction
+                const cashIndex = cashTransactions.findIndex(ct => 
+                    ct.datum === transaction.datum && 
+                    ct.crypto === crypto && 
+                    ct.type === (isSell ? 'sell' : 'buy') &&
+                    Math.abs(ct.bedrag - transaction.bedrag) < 0.01
+                );
+                
+                if (cashIndex !== -1) {
+                    cashTransactions.splice(cashIndex, 1);
+                }
+                
+                // Remove the crypto transaction
                 if (crypto === 'BTC') {
                     btcTransactions.splice(index, 1);
                 } else {
                     xrpTransactions.splice(index, 1);
                 }
+                
                 saveToFirebase();
+                updateDashboard();
                 updateTransactionLists();
             }
         }
@@ -1210,16 +1390,26 @@
             let btcTotaalCrypto = 0;
 
             btcTransactions.forEach((t, i) => {
-                btcTotaalBedrag += t.bedrag;
-                btcTotaalCrypto += t.hoeveelheid;
+                // Handle buy vs sell
+                if (t.type === 'sell') {
+                    btcTotaalBedrag -= t.bedrag;  // Money OUT
+                    btcTotaalCrypto -= t.hoeveelheid;  // Crypto OUT
+                } else {
+                    btcTotaalBedrag += t.bedrag;  // Money IN
+                    btcTotaalCrypto += t.hoeveelheid;  // Crypto IN
+                }
                 
                 const item = document.createElement('div');
-                item.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100';
+                const isSell = t.type === 'sell';
+                item.className = 'flex items-center justify-between p-3 rounded-lg hover:bg-gray-100 ' + (isSell ? 'bg-orange-50 border border-orange-200' : 'bg-gray-50');
                 item.innerHTML = `
                     <div class="flex-1">
-                        <p class="font-medium text-gray-900 text-sm">${new Date(t.datum).toLocaleDateString('nl-NL')}</p>
-                        <p class="text-xs text-gray-600">€${t.bedrag.toFixed(2)} • ${t.hoeveelheid.toFixed(8)} BTC</p>
-                        <p class="text-xs text-gray-500">€${t.koers.toFixed(2)}</p>
+                        <p class="font-medium text-gray-900 text-sm">
+                            ${new Date(t.datum).toLocaleDateString('nl-NL')}
+                            ${isSell ? '<span class="ml-2 text-xs bg-orange-500 text-white px-2 py-0.5 rounded">SELL</span>' : ''}
+                        </p>
+                        <p class="text-xs text-gray-600">${isSell ? '-' : ''}€${t.bedrag.toFixed(2)} • ${isSell ? '-' : ''}${t.hoeveelheid.toFixed(8)} BTC</p>
+                        <p class="text-xs text-gray-500">€${t.koers.toFixed(2)}${isSell && t.profit ? ' • Profit: €' + t.profit.toFixed(2) : ''}</p>
                     </div>
                     <button onclick="deleteTransaction(${i}, 'BTC')" class="text-red-500 hover:text-red-700 p-2">
                         🗑️
@@ -1237,16 +1427,26 @@
             let xrpTotaalCrypto = 0;
 
             xrpTransactions.forEach((t, i) => {
-                xrpTotaalBedrag += t.bedrag;
-                xrpTotaalCrypto += t.hoeveelheid;
+                // Handle buy vs sell
+                if (t.type === 'sell') {
+                    xrpTotaalBedrag -= t.bedrag;
+                    xrpTotaalCrypto -= t.hoeveelheid;
+                } else {
+                    xrpTotaalBedrag += t.bedrag;
+                    xrpTotaalCrypto += t.hoeveelheid;
+                }
                 
                 const item = document.createElement('div');
-                item.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100';
+                const isSell = t.type === 'sell';
+                item.className = 'flex items-center justify-between p-3 rounded-lg hover:bg-gray-100 ' + (isSell ? 'bg-orange-50 border border-orange-200' : 'bg-gray-50');
                 item.innerHTML = `
                     <div class="flex-1">
-                        <p class="font-medium text-gray-900 text-sm">${new Date(t.datum).toLocaleDateString('nl-NL')}</p>
-                        <p class="text-xs text-gray-600">€${t.bedrag.toFixed(2)} • ${t.hoeveelheid.toFixed(2)} XRP</p>
-                        <p class="text-xs text-gray-500">€${t.koers.toFixed(2)}</p>
+                        <p class="font-medium text-gray-900 text-sm">
+                            ${new Date(t.datum).toLocaleDateString('nl-NL')}
+                            ${isSell ? '<span class="ml-2 text-xs bg-orange-500 text-white px-2 py-0.5 rounded">SELL</span>' : ''}
+                        </p>
+                        <p class="text-xs text-gray-600">${isSell ? '-' : ''}€${t.bedrag.toFixed(2)} • ${isSell ? '-' : ''}${t.hoeveelheid.toFixed(2)} XRP</p>
+                        <p class="text-xs text-gray-500">€${t.koers.toFixed(2)}${isSell && t.profit ? ' • Profit: €' + t.profit.toFixed(2) : ''}</p>
                     </div>
                     <button onclick="deleteTransaction(${i}, 'XRP')" class="text-red-500 hover:text-red-700 p-2">
                         🗑️
@@ -1260,13 +1460,22 @@
         }
 
         function calculateData(transactions, currentPrice, crypto) {
-            let cumulatief = 0;
-            let cumulatiefHoeveelheid = 0;
+            let cumulatiefInvested = 0;  // Money IN (buys) - OUT (sells)
+            let cumulatiefHoeveelheid = 0;  // Net holdings
+            let realizedProfit = 0;  // Total profit from sells
             const today = new Date().toISOString().split('T')[0];
             
             return transactions.map((t, index) => {
-                cumulatief += t.bedrag;
-                cumulatiefHoeveelheid += t.hoeveelheid;
+                // Handle buy vs sell
+                if (t.type === 'sell') {
+                    cumulatiefInvested -= t.bedrag;  // Money came back
+                    cumulatiefHoeveelheid -= t.hoeveelheid;  // Sold coins
+                    realizedProfit += (t.profit || 0);  // Track profit
+                } else {
+                    // Buy (or old transaction without type field)
+                    cumulatiefInvested += t.bedrag;
+                    cumulatiefHoeveelheid += t.hoeveelheid;
+                }
                 
                 let priceToUse;
                 
@@ -1285,15 +1494,20 @@
                 }
                 
                 const waarde = cumulatiefHoeveelheid * priceToUse;
-                const rendement = ((waarde / cumulatief) - 1) * 100;
+                const unrealizedPL = waarde - cumulatiefInvested;
+                const totalPL = realizedProfit + unrealizedPL;
+                const rendement = cumulatiefInvested > 0 ? ((waarde / cumulatiefInvested) - 1) * 100 : 0;
                 
                 return {
                     datum: new Date(t.datum).toLocaleDateString('nl-NL', { day: '2-digit', month: 'short' }),
-                    cumulatief: cumulatief,
+                    cumulatief: cumulatiefInvested,  // Net invested (buys - sells)
                     waarde: waarde,
                     rendement: rendement,
-                    amount: cumulatiefHoeveelheid,
-                    priceUsed: priceToUse // For debugging
+                    amount: cumulatiefHoeveelheid,  // Net holdings
+                    realizedProfit: realizedProfit,
+                    unrealizedPL: unrealizedPL,
+                    totalPL: totalPL,
+                    priceUsed: priceToUse
                 };
             });
         }
@@ -1314,13 +1528,19 @@
             const btcGemKoers = btcLast.cumulatief / btcLast.amount;
             const xrpGemKoers = xrpLast.cumulatief / xrpLast.amount;
 
+            // Calculate totals
+            const totalRealized = btcLast.realizedProfit + xrpLast.realizedProfit;
+            const totalUnrealized = btcLast.unrealizedPL + xrpLast.unrealizedPL;
+            const totalPL = totalRealized + totalUnrealized;
+
             document.getElementById('totaleInleg').textContent = '€' + totaalInleg.toFixed(2);
             document.getElementById('huidigeWaarde').textContent = '€' + totaalWaarde.toFixed(2);
-            const rendementBedrag = totaalWaarde - totaalInleg;
-            document.getElementById('rendementBedrag').textContent = '€' + rendementBedrag.toFixed(2);
-            document.getElementById('rendementPercentage').textContent = totaalRendement.toFixed(1) + '%';
-            document.getElementById('rendementPercentage').className = totaalRendement >= 0 ? 'text-xs md:text-sm mt-1 text-green-600 font-semibold' : 'text-xs md:text-sm mt-1 text-red-600 font-semibold';
-            document.getElementById('rendementCard').style.borderLeftColor = totaalRendement >= 0 ? '#10b981' : '#ef4444';
+            document.getElementById('rendementBedrag').textContent = '€' + totalPL.toFixed(2);
+            document.getElementById('realizedPL').textContent = '€' + totalRealized.toFixed(2);
+            document.getElementById('unrealizedPL').textContent = '€' + totalUnrealized.toFixed(2);
+            document.getElementById('realizedPL').className = totalRealized >= 0 ? 'font-semibold text-green-600' : 'font-semibold text-red-600';
+            document.getElementById('unrealizedPL').className = totalUnrealized >= 0 ? 'font-semibold text-green-600' : 'font-semibold text-red-600';
+            document.getElementById('rendementCard').style.borderLeftColor = totalPL >= 0 ? '#10b981' : '#ef4444';
             
             document.getElementById('btcGemKoers').textContent = '€' + btcGemKoers.toFixed(2);
             document.getElementById('btcHoeveelheid').textContent = btcLast.amount.toFixed(6) + ' BTC';
@@ -1490,6 +1710,10 @@
             document.getElementById('inputDatum').value = new Date().toISOString().split('T')[0];
             document.getElementById('snapshotDatum').value = new Date().toISOString().split('T')[0];
             document.getElementById('cashDatum').value = new Date().toISOString().split('T')[0];
+            document.getElementById('sellDatum').value = new Date().toISOString().split('T')[0];
+            
+            // Initialize sell holdings display
+            updateSellHoldings();
             
             updateStatus('Verbinden...', 'gray');
             
