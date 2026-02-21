@@ -834,50 +834,67 @@
         }
 
         function loadDefaultData() {
-            // REAL DATA RECOVERED from Excel backup (Feb 13, 2026)
-            // 22 BTC transactions + 9 XRP transactions = €600 total
-            btcTransactions = [
-                { datum: '2026-01-23', bedrag: 15.0, hoeveelheid: 0.00019302999570315228, koers: 77708.13 },
-                { datum: '2026-01-24', bedrag: 15.0, hoeveelheid: 0.00019460000552664014, koers: 77081.19 },
-                { datum: '2026-01-25', bedrag: 15.0, hoeveelheid: 0.00019627999681764698, koers: 76421.44 },
-                { datum: '2026-01-26', bedrag: 15.0, hoeveelheid: 0.0001991599962451702, koers: 75316.33 },
-                { datum: '2026-01-27', bedrag: 30.0, hoeveelheid: 0.00039534999874146916, koers: 75882.13 },
-                { datum: '2026-01-28', bedrag: 30.0, hoeveelheid: 0.00039595999378606785, koers: 75765.23 },
-                { datum: '2026-01-29', bedrag: 30.0, hoeveelheid: 0.00040016001064959177, koers: 74970.01 },
-                { datum: '2026-01-30', bedrag: 30.0, hoeveelheid: 0.0004250400139753157, koers: 70581.59 },
-                { datum: '2026-01-31', bedrag: 30.0, hoeveelheid: 0.0004176999977883354, koers: 71833.92 },
-                { datum: '2026-02-01', bedrag: 30.0, hoeveelheid: 0.0004440500110991169, koers: 67558.44 },
-                { datum: '2026-02-02', bedrag: 30.0, hoeveelheid: 0.00045504001127998655, koers: 65934.07 },
-                { datum: '2026-02-03', bedrag: 30.0, hoeveelheid: 0.0004416399951011036, koers: 67931.71 },
-                { datum: '2026-02-04', bedrag: 30.0, hoeveelheid: 0.00045570001146928085, koers: 65835.67 },
-                { datum: '2026-02-05', bedrag: 15.0, hoeveelheid: 0.00024558000685646813, koers: 61082.38 },
-                { datum: '2026-02-06', bedrag: 15.0, hoeveelheid: 0.00026853000668883836, koers: 55870.08 },
-                { datum: '2026-02-07', bedrag: 15.0, hoeveelheid: 0.00025567000521588697, koers: 58676.26 },
-                { datum: '2026-02-08', bedrag: 15.0, hoeveelheid: 0.0002491099952651325, koers: 60211.95 },
-                { datum: '2026-02-09', bedrag: 15.0, hoeveelheid: 0.0002475800001434401, koers: 60576.69 },
-                { datum: '2026-02-10', bedrag: 15.0, hoeveelheid: 0.00026134001152034686, koers: 57390.37 },
-                { datum: '2026-02-11', bedrag: 15.0, hoeveelheid: 0.00024743000883330847, koers: 60625.63 },
-                { datum: '2026-02-12', bedrag: 15.0, hoeveelheid: 0.00021996000632119796, koers: 68196.21 },
-                { datum: '2026-02-13', bedrag: 15.0, hoeveelheid: 0.00021892000718517233, koers: 68530.70 }
-            ];
+    // REAL DATA from Kraken export (21 Feb 2026)
+    // 30 BTC + 17 XRP = €900 total
+    btcTransactions = [
+        { datum: '2026-01-23', bedrag: 15.0, hoeveelheid: 0.00019303, koers: 77708.12827021707, type: 'buy' },
+        { datum: '2026-01-24', bedrag: 15.0, hoeveelheid: 0.0001946, koers: 77081.19218910586, type: 'buy' },
+        { datum: '2026-01-25', bedrag: 15.0, hoeveelheid: 0.00019628, koers: 76421.43876095374, type: 'buy' },
+        { datum: '2026-01-26', bedrag: 15.0, hoeveelheid: 0.00019916, koers: 75316.32858003615, type: 'buy' },
+        { datum: '2026-01-27', bedrag: 30.0, hoeveelheid: 0.00039535, koers: 75882.1297584419, type: 'buy' },
+        { datum: '2026-01-28', bedrag: 30.0, hoeveelheid: 0.00039596, koers: 75765.22881099102, type: 'buy' },
+        { datum: '2026-01-29', bedrag: 30.0, hoeveelheid: 0.00040016, koers: 74970.01199520192, type: 'buy' },
+        { datum: '2026-01-30', bedrag: 30.0, hoeveelheid: 0.00042504, koers: 70581.59232072276, type: 'buy' },
+        { datum: '2026-01-31', bedrag: 30.0, hoeveelheid: 0.00041763, koers: 71833.91997701315, type: 'buy' },
+        { datum: '2026-02-01', bedrag: 30.0, hoeveelheid: 0.00044406, koers: 67558.43804891231, type: 'buy' },
+        { datum: '2026-02-02', bedrag: 30.0, hoeveelheid: 0.000455, koers: 65934.06593406593, type: 'buy' },
+        { datum: '2026-02-03', bedrag: 30.0, hoeveelheid: 0.00044162, koers: 67931.70599157647, type: 'buy' },
+        { datum: '2026-02-04', bedrag: 30.0, hoeveelheid: 0.00045568, koers: 65835.67415730338, type: 'buy' },
+        { datum: '2026-02-05', bedrag: 15.0, hoeveelheid: 0.00024557, koers: 61082.379769515814, type: 'buy' },
+        { datum: '2026-02-06', bedrag: 15.0, hoeveelheid: 0.00026848, koers: 55870.08217472575, type: 'buy' },
+        { datum: '2026-02-07', bedrag: 15.0, hoeveelheid: 0.00025564, koers: 58676.26077597031, type: 'buy' },
+        { datum: '2026-02-08', bedrag: 15.0, hoeveelheid: 0.00024912, koers: 60211.94630872483, type: 'buy' },
+        { datum: '2026-02-09', bedrag: 15.0, hoeveelheid: 0.00024762, koers: 60576.68835154827, type: 'buy' },
+        { datum: '2026-02-10', bedrag: 15.0, hoeveelheid: 0.00025419, koers: 59010.394641859695, type: 'buy' },
+        { datum: '2026-02-11', bedrag: 15.0, hoeveelheid: 0.00026145, koers: 57374.09049487518, type: 'buy' },
+        { datum: '2026-02-12', bedrag: 15.0, hoeveelheid: 0.00026019, koers: 57660.63308084608, type: 'buy' },
+        { datum: '2026-02-13', bedrag: 15.0, hoeveelheid: 0.00026335, koers: 56957.28395061729, type: 'buy' },
+        { datum: '2026-02-14', bedrag: 15.0, hoeveelheid: 0.00025124, koers: 59703.870446247804, type: 'buy' },
+        { datum: '2026-02-15', bedrag: 15.0, hoeveelheid: 0.00024598, koers: 60980.56549635608, type: 'buy' },
+        { datum: '2026-02-16', bedrag: 15.0, hoeveelheid: 0.00025428, koers: 58990.08966493629, type: 'buy' },
+        { datum: '2026-02-17', bedrag: 15.0, hoeveelheid: 0.00025439, koers: 58968.66181874389, type: 'buy' },
+        { datum: '2026-02-18', bedrag: 25.0, hoeveelheid: 0.00042597, koers: 58689.57907833885, type: 'buy' },
+        { datum: '2026-02-19', bedrag: 25.0, hoeveelheid: 0.00043115, koers: 57984.45976109426, type: 'buy' },
+        { datum: '2026-02-20', bedrag: 25.0, hoeveelheid: 0.00042459, koers: 58880.33215422653, type: 'buy' },
+        { datum: '2026-02-21', bedrag: 25.0, hoeveelheid: 0.00042581, koers: 58711.62803924159, type: 'buy' }
+    ];
 
-            xrpTransactions = [
-                { datum: '2026-02-05', bedrag: 15.0, hoeveelheid: 12.195122409145953, koers: 1.23 },
-                { datum: '2026-02-06', bedrag: 15.0, hoeveelheid: 12.295081970697095, koers: 1.22 },
-                { datum: '2026-02-07', bedrag: 15.0, hoeveelheid: 12.295081970697095, koers: 1.22 },
-                { datum: '2026-02-08', bedrag: 15.0, hoeveelheid: 12.396693995095123, koers: 1.21 },
-                { datum: '2026-02-09', bedrag: 15.0, hoeveelheid: 12.295081970697095, koers: 1.22 },
-                { datum: '2026-02-10', bedrag: 15.0, hoeveelheid: 12.295081970697095, koers: 1.22 },
-                { datum: '2026-02-11', bedrag: 15.0, hoeveelheid: 12.810256524421693, koers: 1.17 },
-                { datum: '2026-02-12', bedrag: 15.0, hoeveelheid: 12.810256524421693, koers: 1.17 },
-                { datum: '2026-02-13', bedrag: 15.0, hoeveelheid: 12.919895718419598, koers: 1.16 }
-            ];
+    xrpTransactions = [
+        { datum: '2026-02-05', bedrag: 15.0, hoeveelheid: 12.13497, koers: 1.2361028945076964, type: 'buy' },
+        { datum: '2026-02-06', bedrag: 15.0, hoeveelheid: 13.42831, koers: 1.1170331653933584, type: 'buy' },
+        { datum: '2026-02-07', bedrag: 15.0, hoeveelheid: 12.28213, koers: 1.2213086304304992, type: 'buy' },
+        { datum: '2026-02-08', bedrag: 15.0, hoeveelheid: 12.21926, koers: 1.2275682009302713, type: 'buy' },
+        { datum: '2026-02-09', bedrag: 15.0, hoeveelheid: 12.2341, koers: 1.2261079063475085, type: 'buy' },
+        { datum: '2026-02-10', bedrag: 15.0, hoeveelheid: 12.31937, koers: 1.2176314637644857, type: 'buy' },
+        { datum: '2026-02-11', bedrag: 15.0, hoeveelheid: 12.82329, koers: 1.1697348736121764, type: 'buy' },
+        { datum: '2026-02-12', bedrag: 15.0, hoeveelheid: 12.63381, koers: 1.1872953367434892, type: 'buy' },
+        { datum: '2026-02-13', bedrag: 15.0, hoeveelheid: 12.88656, koers: 1.163986449864499, type: 'buy' },
+        { datum: '2026-02-14', bedrag: 15.0, hoeveelheid: 12.26338, koers: 1.2232471153846153, type: 'buy' },
+        { datum: '2026-02-15', bedrag: 10.0, hoeveelheid: 10.55858, koers: 0.9471059471059471, type: 'buy' },
+        { datum: '2026-02-16', bedrag: 15.0, hoeveelheid: 11.9363, koers: 1.2567093866968734, type: 'buy' },
+        { datum: '2026-02-17', bedrag: 15.0, hoeveelheid: 11.81613, koers: 1.269488491295195, type: 'buy' },
+        { datum: '2026-02-18', bedrag: 25.0, hoeveelheid: 15.61122, koers: 1.6014479065024074, type: 'buy' },
+        { datum: '2026-02-19', bedrag: 25.0, hoeveelheid: 16.1537, koers: 1.5476397515527952, type: 'buy' },
+        { datum: '2026-02-20', bedrag: 25.0, hoeveelheid: 16.23798, koers: 1.539553990962554, type: 'buy' },
+        { datum: '2026-02-21', bedrag: 25.0, hoeveelheid: 16.14811, koers: 1.5481808905380332, type: 'buy' }
+    ];
 
-            // Initialize empty cash transactions (new cash management system)
-            cashTransactions = [];
+    // Initialize empty cash transactions
+    cashTransactions = [];
 
-            console.log('✅ Loaded REAL data from Excel backup: 22 BTC + 9 XRP = €600 total');
-        }
+    console.log('✅ Loaded Kraken data: 30 BTC + 17 XRP = €900 total');
+}
+
 
         // Export/Import functions
         function exportData() {
